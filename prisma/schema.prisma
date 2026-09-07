@@ -1,0 +1,202 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model tenant {
+  id                             BigInt    @id @default(autoincrement())
+  uuid                           String    @unique @default(uuid()) @db.Uuid
+  created_at                     DateTime? @default(now()) @db.Timestamptz
+  updated_at                     DateTime? @updatedAt @db.Timestamptz
+  slug                           String    @unique @db.VarChar(100)
+  name                           String    @unique @db.VarChar(100)
+  code                           String?   @unique @db.VarChar(3)
+  description                    String?   @db.Text
+  timezone                       String?   @db.VarChar(255)
+  frontend_url                   String?   @db.VarChar(255)
+  features                       Json?     @db.Json
+  feature_programs               Json?     @db.Json
+  additional_features            Json?     @db.Json
+  billing_mode                   String?   @db.VarChar(255)
+  white_label                    Boolean?  @default(false)
+  is_active                      Boolean   @default(true)
+  is_billing_enabled             Boolean?  @default(false)
+  is_sandbox_mode_on             Boolean?  @default(false)
+  is_trial_enabled               Boolean?  @default(false)
+  trial_period_start_at          DateTime? @db.Timestamptz
+  trial_period_end_at            DateTime? @db.Timestamptz
+  is_data_archieved              Boolean?  @default(false)
+  is_marked_for_deletion         Boolean?  @default(false)
+  marked_for_deletion_at         DateTime? @db.Timestamptz
+  disable_patient_emails         Boolean?  @default(false)
+  disable_patient_notifications  Boolean?  @default(false)
+  disable_patient_sms            Boolean?  @default(false)
+  disable_provider_emails        Boolean?  @default(false)
+  disable_provider_notifications Boolean?  @default(false)
+  disable_provider_sms           Boolean?  @default(false)
+  communication_logo             String?   @db.Text
+  consent_logo                   String?   @db.Text
+  report_logo                    String?   @db.Text
+
+  user_account          user_account[]
+  provider              provider[]
+  provider_group        provider_group[]
+  provider_group_member provider_group_member[]
+
+  @@index([slug])
+  @@index([code])
+}
+
+model user_account {
+  id                    BigInt    @id @default(autoincrement())
+  uuid                  String    @unique @default(uuid()) @db.Uuid
+  tenant_id             BigInt
+  created_at            DateTime? @default(now()) @db.Timestamptz
+  updated_at            DateTime? @updatedAt @db.Timestamptz
+  password              String?   @db.VarChar(128)
+  username              String?   @db.VarChar(150)
+  email                 String?   @db.VarChar(254)
+  first_name            String?   @db.VarChar(255)
+  last_name             String?   @db.VarChar(255)
+  picture               String?   @db.Text
+  last_login            DateTime? @db.Timestamptz
+  date_joined           DateTime? @default(now()) @db.Timestamptz
+  is_superuser          Boolean?  @default(false)
+  is_staff              Boolean?  @default(false)
+  is_active             Boolean?  @default(true)
+  is_tenant_admin       Boolean?  @default(false)
+  is_super_tenant_admin Boolean?  @default(false)
+  is_provider           Boolean?  @default(false)
+  is_patient            Boolean?  @default(false)
+  is_deleted            Boolean?  @default(false)
+
+  tenant     tenant     @relation(fields: [tenant_id], references: [id])
+  added_by   provider[] @relation("provider_added_by")
+  deleted_by provider[] @relation("provider_deleted_by")
+  provider   provider?  @relation("provider_user")
+
+  @@unique([tenant_id, email])
+  @@unique([tenant_id, username])
+  @@index([tenant_id])
+  @@index([email])
+}
+
+model provider_group {
+  id                             BigInt    @id @default(autoincrement())
+  uuid                           String    @unique @default(uuid()) @db.Uuid
+  tenant_id                      BigInt
+  created_at                     DateTime? @default(now()) @db.Timestamptz
+  updated_at                     DateTime? @updatedAt @db.Timestamptz
+  group_name                     String?   @db.VarChar(255)
+  group_npi                      String?   @db.VarChar(10)
+  code                           String?   @db.VarChar(3)
+  email                          String?   @db.VarChar(254)
+  system_email                   String?   @db.VarChar(254)
+  system_email_verified          Boolean?  @default(false)
+  phone                          String?   @db.VarChar(15)
+  fax_id                         String?   @db.VarChar(20)
+  website                        String?   @db.VarChar(200)
+  speciality                     Json?     @db.Json
+  status                         String?   @db.VarChar(10)
+  picture                        String?   @db.Text
+  bio                            String?   @db.Text
+  timezone                       String?   @db.VarChar
+  communication_logo             String?   @db.Text
+  consent_logo                   String?   @db.Text
+  report_logo                    String?   @db.Text
+  disable_patient_emails         Boolean?  @default(false)
+  disable_patient_notifications  Boolean?  @default(false)
+  disable_patient_sms            Boolean?  @default(false)
+  disable_provider_emails        Boolean?  @default(false)
+  disable_provider_notifications Boolean?  @default(false)
+  disable_provider_sms           Boolean?  @default(false)
+
+  tenant  tenant                  @relation(fields: [tenant_id], references: [id])
+  members provider_group_member[]
+
+  @@unique([tenant_id, group_npi])
+  @@unique([tenant_id, code])
+  @@unique([tenant_id, system_email])
+  @@index([tenant_id])
+  @@index([created_at])
+}
+
+model provider {
+  id                   BigInt    @id @default(autoincrement())
+  uuid                 String    @unique @default(uuid()) @db.Uuid
+  tenant_id            BigInt
+  created_at           DateTime? @default(now()) @db.Timestamptz
+  updated_at           DateTime? @updatedAt @db.Timestamptz
+  first_name           String?   @db.VarChar(255)
+  middle_name          String?   @db.VarChar(255)
+  last_name            String?   @db.VarChar(255)
+  display_name         String?   @db.VarChar(255)
+  gender               String?   @db.VarChar(100)
+  pronoun              String?   @db.VarChar(50)
+  email                String?   @db.VarChar(254)
+  temparory_email      String?   @db.VarChar(254)
+  phone                String?   @db.VarChar(15)
+  npi                  String?   @db.VarChar(10)
+  role                 String?   @db.VarChar(30)
+  secondary_role       String?   @db.VarChar(30)
+  permission           String?   @db.VarChar(100)
+  language             String?   @db.VarChar(20)
+  timezone             String?   @db.VarChar
+  picture              String?   @db.Text
+  status               String?   @db.VarChar(20)
+  speciality           Json?     @db.Json
+  provider_type        String?   @db.VarChar(255)
+  year_of_experience   String?   @db.VarChar(10)
+  bio                  String?   @db.Text
+  state_license        String?   @db.VarChar(50)
+  license_number       String?   @db.VarChar(50)
+  taxonomyCode         String?   @db.VarChar(100)
+  is_partner           Boolean?  @default(false)
+  is_tenant_provider   Boolean?  @default(false)
+  is_tenant_admin      Boolean?  @default(false)
+  is_clinical_manager  Boolean   @default(false)
+  is_auto_timelog      Boolean?  @default(false)
+  auto_timelog_message String?   @db.VarChar
+  is_role_changed      Boolean?  @default(false)
+  is_deleted           Boolean?  @default(false)
+  deleted_at           DateTime? @db.Timestamptz
+  deleted_reason       String?   @db.VarChar(255)
+  user_id              BigInt?   @unique
+  added_by_id          BigInt?
+  deleted_by_id        BigInt?
+
+  tenant     tenant                  @relation(fields: [tenant_id], references: [id])
+  user       user_account?           @relation("provider_user", fields: [user_id], references: [id])
+  added_by   user_account?           @relation("provider_added_by", fields: [added_by_id], references: [id])
+  deleted_by user_account?           @relation("provider_deleted_by", fields: [deleted_by_id], references: [id])
+  groups     provider_group_member[]
+
+  @@unique([tenant_id, email])
+  @@unique([tenant_id, npi])
+  @@index([tenant_id])
+  @@index([email])
+  @@index([npi])
+  @@index([added_by_id])
+  @@index([deleted_by_id])
+  @@index([created_at])
+}
+
+model provider_group_member {
+  id                BigInt    @id @default(autoincrement())
+  tenant_id         BigInt
+  created_at        DateTime? @default(now()) @db.Timestamptz
+  provider_id       BigInt
+  provider_group_id BigInt
+
+  tenant         tenant         @relation(fields: [tenant_id], references: [id])
+  provider       provider       @relation(fields: [provider_id], references: [id])
+  provider_group provider_group @relation(fields: [provider_group_id], references: [id])
+
+  @@unique([provider_id, provider_group_id])
+  @@index([tenant_id])
+  @@index([provider_id])
+  @@index([provider_group_id])
+}
