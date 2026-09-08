@@ -45,8 +45,6 @@ async function seed() {
       lastName: SEED.provider.last_name,
       isActive: true,
       isProvider: true,
-      isTenantAdmin: true,
-      isSuperTenantAdmin: true,
     },
   });
 
@@ -63,8 +61,6 @@ async function seed() {
       status: "active",
       language: "en",
       timezone: SEED.providerGroup.timezone,
-      is_tenant_admin: true,
-      is_tenant_provider: true,
     },
   });
 

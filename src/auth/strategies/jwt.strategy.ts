@@ -23,8 +23,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       uuid: payload.user_id,
       email: null,
       providerId: payload.provider_id ? BigInt(payload.provider_id) : null,
-      isTenantAdmin: payload.admin?.isTenantAdmin ?? false,
-      isSuperTenantAdmin: payload.admin?.isSuperAdmin ?? false,
       language: payload.language,
     };
   }

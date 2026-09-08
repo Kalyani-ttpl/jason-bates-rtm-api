@@ -22,23 +22,26 @@ model User {
   createdAt           DateTime? @default(now()) @map("created_at") @db.Timestamptz
   updatedAt           DateTime? @updatedAt @map("updated_at") @db.Timestamptz
 
-  username           String?   @unique @db.VarChar(150)
-  firstName          String?   @map("first_name") @db.VarChar(255)
-  lastName           String?   @map("last_name") @db.VarChar(255)
-  picture            String?   @db.Text
-  dateJoined         DateTime? @default(now()) @map("date_joined") @db.Timestamptz
-  isSuperuser        Boolean?  @default(false) @map("is_superuser")
-  isStaff            Boolean?  @default(false) @map("is_staff")
-  isActive           Boolean?  @default(true) @map("is_active")
-  isTenantAdmin      Boolean?  @default(false) @map("is_tenant_admin")
-  isSuperTenantAdmin Boolean?  @default(false) @map("is_super_tenant_admin")
-  isProvider         Boolean?  @default(false) @map("is_provider")
-  isPatient          Boolean?  @default(false) @map("is_patient")
-  isDeleted          Boolean?  @default(false) @map("is_deleted")
+  username    String?   @unique @db.VarChar(150)
+  firstName   String?   @map("first_name") @db.VarChar(255)
+  lastName    String?   @map("last_name") @db.VarChar(255)
+  picture     String?   @db.Text
+  dateJoined  DateTime? @default(now()) @map("date_joined") @db.Timestamptz
+  isSuperuser Boolean?  @default(false) @map("is_superuser")
+  isStaff     Boolean?  @default(false) @map("is_staff")
+  isActive    Boolean?  @default(true) @map("is_active")
+  isProvider  Boolean?  @default(false) @map("is_provider")
+  isPatient   Boolean?  @default(false) @map("is_patient")
+  isDeleted   Boolean?  @default(false) @map("is_deleted")
 
   addedBy   Provider[] @relation("provider_added_by")
   deletedBy Provider[] @relation("provider_deleted_by")
   provider  Provider?  @relation("provider_user")
+
+  patient         Patient?
+  emailAddresses  EmailAddress[]
+  notifications   UserNotification[]
+  chatParticipant ChatParticipant?
 
   @@map("users")
 }
@@ -104,6 +107,8 @@ model Address {
   createdAt  DateTime? @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt  DateTime? @updatedAt @map("updated_at") @db.Timestamptz(3)
 
+  patient Patient? @relation(fields: [patientId], references: [id])
+
   providerGroupsPhysical ProviderGroup[] @relation("physical_address")
   providerGroupsBilling  ProviderGroup[] @relation("billing_address")
 
@@ -163,6 +168,12 @@ model ProviderGroup {
   bulk_communication_template BulkCommunicationTemplate[]
   careplan                    CarePlan[]
 
+  patients                     Patient[]
+  assessments                  Assessment[]
+  education_materials          EducationMaterial[]
+  additional_consent_templates AdditionalConsentTemplate[]
+  roles                        Role[]
+
   @@index([physical_address_id])
   @@index([billing_address_id])
   @@index([created_at])
@@ -202,8 +213,6 @@ model Provider {
   caller_id_verified   Boolean?  @default(false)
   dynamic_caller_ids   Json?     @db.Json
   is_partner           Boolean?  @default(false)
-  is_tenant_provider   Boolean?  @default(false)
-  is_tenant_admin      Boolean?  @default(false)
   is_clinical_manager  Boolean   @default(false)
   is_auto_timelog      Boolean?  @default(false)
   auto_timelog_message String?   @db.VarChar
@@ -224,6 +233,10 @@ model Provider {
   consent_created_by Consent[]  @relation("consent_created_by")
   consent_deleted_by Consent[]  @relation("consent_deleted_by")
   careplan           CarePlan[]
+
+  care_manager_for       PatientCareManager[]
+  prescribed_medications PatientMedication[]
+  education_materials    EducationMaterial[]
 
   @@index([added_by_id])
   @@index([deleted_by_id])
@@ -261,6 +274,10 @@ model Condition {
 
   questions ConditionQuestion[]
   icd_codes IcdCode[]
+
+  patient_conditions  PatientCondition[]
+  careplan_questions  CarePlanQuestion[]
+  education_materials EducationMaterial[]
 
   @@index([created_at])
   @@map("conditions")
@@ -387,10 +404,1399 @@ model CarePlan {
   copied_from    CarePlan?      @relation("careplan_copied_from", fields: [copied_from_id], references: [id])
   copies         CarePlan[]     @relation("careplan_copied_from")
 
+  patient_care_plans PatientCarePlan[]
+  questions          CarePlanQuestion[]
+  responses          CarePlanResponse[]
+  progress           CarePlanProgress[]
+
   @@index([title])
   @@index([creator_id])
   @@index([provider_group_id])
   @@index([copied_from_id])
   @@index([created_at])
   @@map("care_plans")
+}
+
+// ============================================================================
+// Patient and its satellites — reused from `schema (2).prisma` (camelCase
+// fields mapped onto its snake_case columns). Patient additionally carries the
+// care-management columns from Zenara's core_patient, appended below the shared
+// block, since `schema (2).prisma` has no enrolment or eligibility concept.
+// ============================================================================
+
+model Patient {
+  id                         BigInt    @id @default(autoincrement())
+  uuid                       String    @unique @default(uuid()) @db.Uuid
+  userId                     BigInt?   @unique @map("user_id")
+  firstName                  String    @map("first_name")
+  middleName                 String?   @map("middle_name")
+  lastName                   String    @map("last_name")
+  preferredName              String?   @map("preferred_name")
+  dateOfBirth                DateTime? @map("date_of_birth") @db.Date
+  gender                     String?
+  phone                      String?
+  phoneType                  String?   @map("phone_type")
+  email                      String?   @unique
+  preferredContactMethod     String?   @map("preferred_contact_method")
+  preferredLanguage          String?   @map("preferred_language")
+  interpreterRequired        Boolean   @default(false) @map("interpreter_required")
+  hasAdvancedDirective       Boolean   @default(false) @map("has_advanced_directive")
+  hasPowerOfAttorney         Boolean   @default(false) @map("has_power_of_attorney")
+  isActive                   Boolean   @default(true) @map("is_active")
+  profilePicture             String?   @map("profile_picture")
+  treatmentGoals             String[]  @map("treatment_goals")
+  referringPhysician         String?   @map("referring_physician")
+  referringPhysicianNumber   String?   @map("referring_physician_number")
+  primaryCarePhysician       String?   @map("primary_care_physician")
+  primaryCarePhysicianNumber String?   @map("primary_care_physician_number")
+  hearAboutUs                String?   @map("hear_about_us")
+  outsideRecordsConsent      Boolean   @default(false) @map("outside_records_consent")
+  hipaa_notice               Boolean   @default(false) @map("hipaa_notice")
+  treatment_consent          Boolean   @default(false) @map("treatment_consent")
+  financial_consent          Boolean   @default(false) @map("financial_consent")
+  signature                  String?   @map("signature")
+  signature_date             DateTime? @map("signature_date") @db.Date
+  printedFirstName           String?   @map("printed_first_name")
+  printedMiddleName          String?   @map("printed_middle_name")
+  printedLastName            String?   @map("printed_last_name")
+  createdAt                  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  // Care management — from Zenara's core_patient.
+  mrn                    String?   @map("mrn")
+  status                 String?   @map("status")
+  statusUpdatedAt        DateTime? @map("status_updated_at") @db.Timestamptz(3)
+  inviteStatus           String?   @map("invite_status")
+  invitedAt              DateTime? @map("invited_at") @db.Timestamptz(3)
+  lastCallAt             DateTime? @map("last_call_at") @db.Timestamptz(3)
+  lastCallStatus         String?   @map("last_call_status")
+  riskLevel              String?   @map("risk_level")
+  riskScore              Float?    @map("risk_score")
+  cmsRiskScore           Float?    @map("cms_risk_score")
+  cmsRiskTier            String?   @map("cms_risk_tier")
+  riskStratificationBool Boolean?  @map("risk_stratification_bool")
+  riskStratificationDate DateTime? @map("risk_stratification_date") @db.Timestamptz(3)
+  riskStratificationFreq Int?      @map("risk_stratification_freq")
+  maritalStatus          String?   @map("marital_status")
+  isConsentToMessage     Boolean?  @default(false) @map("is_consent_to_message")
+  isConsentToCall        Boolean?  @default(false) @map("is_consent_to_call")
+  isConsentToEmail       Boolean?  @default(false) @map("is_consent_to_email")
+  isPcmEligible          Boolean?  @default(false) @map("is_pcm_eligible")
+  isRtmEligible          Boolean?  @default(false) @map("is_rtm_eligible")
+  isHeartEligible        Boolean?  @default(false) @map("is_heart_eligible")
+  primaryPhysicianId     BigInt?   @map("primary_physician_id")
+  primaryCareManagerId   BigInt?   @map("primary_care_manager_id")
+  secondaryCareManagerId BigInt?   @map("secondary_care_manager_id")
+  providerGroupId        BigInt?   @map("provider_group_id")
+  isDeleted              Boolean?  @default(false) @map("is_deleted")
+
+  user          User?          @relation(fields: [userId], references: [id])
+  providerGroup ProviderGroup? @relation(fields: [providerGroupId], references: [id])
+
+  addresses                 Address[]
+  emergencyContacts         PatientEmergencyContact[]
+  powerOfAttorney           PatientPowerOfAttorney?
+  insurances                PatientInsurance[]
+  imagings                  PatientImaging[]
+  preferredPharmacies       PatientPreferredPharmacy[]
+  allergies                 PatientAllergy[]
+  patientMedications        PatientMedication[]
+  patientSurgicalHistories  PatientSurgicalHistory[]
+  patientMedicalHistories   PatientMedicalHistory[]
+  patientSocialHistories    PatientSocialHistory[]
+  patientDocuments          PatientDocument[]
+  patientEducationMaterials PatientEducationMaterial[]
+
+  caregiverContacts   PatientCaregiverContact[]
+  patientConditions   PatientCondition[]
+  careManagers        PatientCareManager[]
+  symptoms            Symptom[]
+  labResults          LabResult[]
+  vitals              Vital[]
+  vitalAlerts         VitalAlert[]
+  vitalReviewNotes    VitalReviewNote[]
+  enrollments         CarePlanEnrollment[]
+  patientCarePlans    PatientCarePlan[]
+  carePlanResponses   CarePlanResponse[]
+  carePlanProgress    CarePlanProgress[]
+  providerReviews     CarePlanProviderReview[]
+  monthlyUpdates      CarePlanMonthlyUpdate[]
+  assignedAssessments AssignedAssessment[]
+  screenings          Screening[]
+  educationSchedules  EducationSchedulePatient[]
+  smsRecords          SmsRecord[]
+  timeLogs            TimeLog[]
+  pcmBillings         PcmBilling[]
+
+  @@index([dateOfBirth])
+  @@index([isActive, firstName, id])
+  @@index([isActive, lastName, firstName])
+  @@index([status])
+  @@index([inviteStatus])
+  @@index([providerGroupId])
+  @@index([primaryPhysicianId])
+  @@index([primaryCareManagerId])
+  @@map("patients")
+}
+
+model PatientInsurance {
+  id                    BigInt    @id @default(autoincrement())
+  uuid                  String    @unique @default(uuid()) @db.Uuid
+  patientId             BigInt    @map("patient_id")
+  name                  String
+  memberId              String?   @map("member_id")
+  groupId               String?   @map("group_id")
+  groupName             String?   @map("group_name")
+  type                  String?
+  cardFrontUrl          String?   @map("card_front_url")
+  cardBackUrl           String?   @map("card_back_url")
+  effectiveDate         DateTime? @map("effective_date") @db.Date
+  expirationDate        DateTime? @map("expiration_date") @db.Date
+  insuredFirstName      String?   @map("insured_first_name")
+  insuredMiddleName     String?   @map("insured_middle_name")
+  insuredLastName       String?   @map("insured_last_name")
+  insuredDob            DateTime? @map("insured_dob") @db.Date
+  relationshipToInsured String?   @map("relationship_to_insured")
+  isWorkersCompOrAuto   Boolean   @default(false) @map("is_workers_comp_or_auto")
+  claimNumber           String?   @map("claim_number")
+  adjusterName          String?   @map("adjuster_name")
+  adjusterPhone         String?   @map("adjuster_phone")
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Restrict)
+
+  @@index([patientId])
+  @@index([name])
+  @@index([patientId, name])
+  @@map("patient_insurances")
+}
+
+model PatientEmergencyContact {
+  id                BigInt   @id @default(autoincrement())
+  uuid              String   @unique @default(uuid()) @db.Uuid
+  patientId         BigInt   @map("patient_id")
+  firstName         String   @map("first_name")
+  lastName          String   @map("last_name")
+  relationship      String?
+  phone             String?
+  email             String?
+  preferredLanguage String?  @map("preferred_language")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Restrict)
+
+  @@index([patientId])
+  @@index([lastName, firstName])
+  @@index([phone])
+  @@map("patient_emergency_contacts")
+}
+
+model PatientPowerOfAttorney {
+  id           BigInt   @id @default(autoincrement())
+  uuid         String   @unique @default(uuid()) @db.Uuid
+  patientId    BigInt   @unique @map("patient_id")
+  name         String
+  relationship String?
+  phone        String?
+  email        String?
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Restrict)
+
+  @@index([name])
+  @@index([phone])
+  @@map("patient_power_of_attorneys")
+}
+
+model PatientPreferredPharmacy {
+  id        BigInt   @id @default(autoincrement())
+  uuid      String   @unique @default(uuid()) @db.Uuid
+  patientId BigInt   @map("patient_id")
+  name      String
+  address   String?
+  phone     String?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Restrict)
+
+  @@index([name])
+  @@index([patientId])
+  @@map("patient_preferred_pharmacies")
+}
+
+model PatientImaging {
+  id          BigInt    @id @default(autoincrement())
+  uuid        String    @unique @default(uuid()) @db.Uuid
+  patientId   BigInt    @map("patient_id")
+  facility    String?
+  date        DateTime? @db.Date
+  imageUrls   String[]  @map("image_urls")
+  description String?
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Restrict)
+
+  @@index([patientId])
+  @@map("patient_imagings")
+}
+
+model PatientAllergy {
+  id        BigInt   @id @default(autoincrement())
+  uuid      String   @unique @default(uuid()) @db.Uuid
+  patientId BigInt   @map("patient_id")
+  name      String
+  reaction  String?
+  severity  String?
+  notes     String?
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Restrict)
+
+  @@index([patientId])
+  @@index([patientId, isActive])
+  @@index([name, isActive])
+  @@map("patient_allergies")
+}
+
+model PatientMedication {
+  id             BigInt    @id @default(autoincrement())
+  uuid           String    @unique @default(uuid()) @db.Uuid
+  patientId      BigInt    @map("patient_id")
+  prescribedById BigInt?   @map("prescribing_provider")
+  name           String
+  dosage         String?
+  frequency      String?
+  route          String?
+  startDate      DateTime? @db.Date
+  endDate        DateTime? @db.Date
+  notes          String?
+  isActive       Boolean   @default(true) @map("is_active")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  patient      Patient   @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  prescribedBy Provider? @relation(fields: [prescribedById], references: [id])
+
+  @@index([patientId, isActive])
+  @@index([prescribedById])
+  @@index([name, isActive])
+  @@map("patient_medications")
+}
+
+model PatientMedicalHistory {
+  id        BigInt    @id @default(autoincrement())
+  uuid      String    @unique @default(uuid()) @db.Uuid
+  patientId BigInt    @map("patient_id")
+  condition String
+  date      DateTime? @db.Date
+  notes     String?
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Restrict)
+
+  @@index([patientId])
+  @@index([condition])
+  @@map("patient_medical_histories")
+}
+
+model PatientSurgicalHistory {
+  id        BigInt    @id @default(autoincrement())
+  uuid      String    @unique @default(uuid()) @db.Uuid
+  patientId BigInt    @map("patient_id")
+  procedure String
+  date      DateTime? @db.Date
+  surgeon   String?
+  notes     String?
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Restrict)
+
+  @@index([patientId])
+  @@index([procedure])
+  @@map("patient_surgical_histories")
+}
+
+model PatientSocialHistory {
+  id                 BigInt   @id @default(autoincrement())
+  uuid               String   @unique @default(uuid()) @db.Uuid
+  patientId          BigInt   @map("patient_id")
+  occupation         String?
+  physicalJobDemands String?  @map("physical_job_demands")
+  activity           String?
+  tobaccoUse         String?  @map("tobacco_use")
+  tobaccoFrequency   String?  @map("tobacco_frequency")
+  alcoholUse         String?  @map("alcohol_use")
+  livingSituation    String?  @map("living_situation")
+  historyOfFalls     Boolean? @map("history_of_falls")
+  numberOfFalls      Int?     @map("number_of_falls")
+  assistiveDevices   String[] @map("assistive_devices")
+  height             String?
+  weight             String?
+  dominantHand       String?  @map("dominant_hand")
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Restrict)
+
+  @@index([patientId])
+  @@map("patient_social_histories")
+}
+
+model PatientDocument {
+  id          BigInt   @id @default(autoincrement())
+  uuid        String   @unique @default(uuid()) @db.Uuid
+  patientId   BigInt   @map("patient_id")
+  name        String
+  type        String?
+  source      String?
+  url         String
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Restrict)
+
+  @@index([patientId])
+  @@index([name])
+  @@map("patient_documents")
+}
+
+model PatientEducationMaterial {
+  id           BigInt   @id @default(autoincrement())
+  uuid         String   @unique @default(uuid()) @db.Uuid
+  assignedById BigInt?  @map("assigned_by_id")
+  patientId    BigInt   @map("patient_id")
+  name         String
+  type         String?
+  url          String
+  description  String?
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+  @@map("patient_education_materials")
+}
+
+model EducationMaterial {
+  id          BigInt   @id @default(autoincrement())
+  uuid        String   @unique @default(uuid()) @db.Uuid
+  addedById   BigInt?  @map("added_by_id")
+  title       String
+  type        String?
+  description String?
+  url         String
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  // From Zenara's core_education, which this table stands in for.
+  speciality      String?  @map("speciality")
+  fileType        String?  @map("file_type")
+  isActive        Boolean? @default(true) @map("is_active")
+  isArchived      Boolean? @default(false) @map("is_archived")
+  archivedById    BigInt?  @map("archived_by_id")
+  unarchivedById  BigInt?  @map("unarchived_by_id")
+  conditionId     BigInt?  @map("condition_id")
+  providerGroupId BigInt?  @map("provider_group_id")
+  userTypes       Json?    @map("user_types")
+  specialities    Json?    @map("specialities")
+
+  addedBy       Provider?           @relation(fields: [addedById], references: [id])
+  condition     Condition?          @relation(fields: [conditionId], references: [id])
+  providerGroup ProviderGroup?      @relation(fields: [providerGroupId], references: [id])
+  schedules     EducationSchedule[]
+
+  @@index([title])
+  @@index([addedById])
+  @@index([conditionId])
+  @@index([providerGroupId])
+  @@map("education_materials")
+}
+
+model AuditLog {
+  id          BigInt   @id @default(autoincrement())
+  occurredAt  DateTime @default(now()) @map("occurred_at") @db.Timestamptz(3)
+  requestId   String   @map("request_id")
+  userId      BigInt?  @map("user_id")
+  accountType String?  @map("account_type")
+  method      String
+  path        String
+  resource    String?
+  resourceId  BigInt?  @map("resource_id")
+  statusCode  Int      @map("status_code")
+  outcome     String
+  ipAddress   String?  @map("ip_address")
+  userAgent   String?  @map("user_agent")
+  durationMs  Int      @map("duration_ms")
+
+  @@index([userId, occurredAt])
+  @@index([resource, resourceId, occurredAt])
+  @@index([occurredAt, id])
+  @@map("audit_logs")
+}
+
+// ============================================================================
+// Care management. No counterpart in `schema (2).prisma`, so these keep their
+// Zenara column names. Actor columns (created_by_id, updated_by_id, ...) are
+// plain ids rather than declared relations, to keep Provider from growing
+// dozens of back-reference fields.
+// ============================================================================
+
+model PatientCaregiverContact {
+  id         BigInt    @id @default(autoincrement())
+  uuid       String    @unique @default(uuid()) @db.Uuid
+  created_at DateTime? @default(now()) @db.Timestamptz
+  updated_at DateTime? @updatedAt @db.Timestamptz
+  first_name String?   @db.VarChar(255)
+  last_name  String?   @db.VarChar(255)
+  email      String?   @db.VarChar(150)
+  phone      String?   @db.VarChar(15)
+  relation   String?   @db.VarChar(50)
+  patient_id BigInt
+
+  patient Patient @relation(fields: [patient_id], references: [id], onDelete: Cascade)
+
+  @@index([patient_id])
+  @@index([created_at])
+  @@map("patient_caregiver_contacts")
+}
+
+model PatientCondition {
+  id             BigInt    @id @default(autoincrement())
+  uuid           String    @unique @default(uuid()) @db.Uuid
+  created_at     DateTime? @default(now()) @db.Timestamptz
+  updated_at     DateTime? @updatedAt @db.Timestamptz
+  status         String?   @db.VarChar(20)
+  type           String?   @db.VarChar(20)
+  onset_date     DateTime? @db.Timestamptz
+  last_occurence DateTime? @db.Timestamptz
+  notes          String?   @db.Text
+  is_complex     Boolean?  @default(false)
+  is_source_ehr  Boolean?  @default(false)
+  is_deleted     Boolean?  @default(false)
+  condition_id   BigInt?
+  patient_id     BigInt
+  updated_by_id  BigInt?
+
+  patient   Patient    @relation(fields: [patient_id], references: [id], onDelete: Cascade)
+  condition Condition? @relation(fields: [condition_id], references: [id])
+
+  @@index([patient_id])
+  @@index([condition_id])
+  @@index([updated_by_id])
+  @@index([created_at])
+  @@map("patient_conditions")
+}
+
+model PatientCareManager {
+  id          BigInt @id @default(autoincrement())
+  patient_id  BigInt
+  provider_id BigInt
+
+  patient  Patient  @relation(fields: [patient_id], references: [id], onDelete: Cascade)
+  provider Provider @relation(fields: [provider_id], references: [id])
+
+  @@unique([patient_id, provider_id])
+  @@index([patient_id])
+  @@index([provider_id])
+  @@map("patient_care_managers")
+}
+
+// ---------------------------------------------------------------- clinical --
+
+model Symptom {
+  id            BigInt    @id @default(autoincrement())
+  uuid          String    @unique @default(uuid()) @db.Uuid
+  created_at    DateTime? @default(now()) @db.Timestamptz
+  updated_at    DateTime? @updatedAt @db.Timestamptz
+  description   String?   @db.Text
+  note          String?   @db.Text
+  is_deleted    Boolean?  @default(false)
+  patient_id    BigInt
+  updated_by_id BigInt?
+
+  patient Patient @relation(fields: [patient_id], references: [id], onDelete: Cascade)
+
+  @@index([patient_id])
+  @@index([updated_by_id])
+  @@index([created_at])
+  @@map("symptoms")
+}
+
+model LabResult {
+  id             BigInt    @id @default(autoincrement())
+  uuid           String    @unique @default(uuid()) @db.Uuid
+  created_at     DateTime? @default(now()) @db.Timestamptz
+  updated_at     DateTime? @updatedAt @db.Timestamptz
+  lab_result_for String    @db.VarChar(255)
+  abnormal_flag  String?   @db.VarChar(255)
+  value          String    @db.VarChar(255)
+  note           String?   @db.Text
+  recorded_at    DateTime? @db.Timestamptz
+  file           String?   @db.Text
+  file_type      String?   @db.VarChar(50)
+  is_track       Boolean   @default(false)
+  is_draft       Boolean   @default(false)
+  is_deleted     Boolean?  @default(false)
+  patient_id     BigInt
+  created_by_id  BigInt?
+  updated_by_id  BigInt?
+
+  patient Patient         @relation(fields: [patient_id], references: [id], onDelete: Cascade)
+  files   LabResultFile[]
+
+  @@index([patient_id])
+  @@index([created_by_id])
+  @@index([updated_by_id])
+  @@index([created_at])
+  @@map("lab_results")
+}
+
+model LabResultFile {
+  id            BigInt    @id @default(autoincrement())
+  uuid          String    @unique @default(uuid()) @db.Uuid
+  created_at    DateTime? @default(now()) @db.Timestamptz
+  updated_at    DateTime? @updatedAt @db.Timestamptz
+  file          String    @db.Text
+  title         String?   @db.VarChar(255)
+  lab_result_id BigInt
+
+  lab_result LabResult @relation(fields: [lab_result_id], references: [id], onDelete: Cascade)
+
+  @@index([lab_result_id])
+  @@index([created_at])
+  @@map("lab_result_files")
+}
+
+model Vital {
+  id              BigInt    @id @default(autoincrement())
+  uuid            String    @unique @default(uuid()) @db.Uuid
+  created_at      DateTime? @default(now()) @db.Timestamptz
+  updated_at      DateTime? @updatedAt @db.Timestamptz
+  recorded_at     DateTime? @default(now()) @db.Timestamptz
+  recorder_method String?   @db.VarChar(30)
+  type            String?   @db.VarChar(30)
+  value           Float?
+  unit            String?   @db.VarChar(100)
+  definition      String?   @db.Text
+  note            String?   @db.Text
+  tags            Json?     @db.Json
+  notes           Json?     @db.Json
+  vital_meta      Json?     @db.Json
+  device_id       String?   @db.VarChar(255)
+  meal_time       String?   @db.VarChar(50)
+  meal_type       String?   @db.VarChar(50)
+  pulse_rate      Float?
+  diastolic       Float?
+  generate_alert  Boolean?  @default(false)
+  is_draft        Boolean?  @default(false)
+  is_track        Boolean?  @default(false)
+  is_from_ehr     Boolean?  @default(false)
+  patient_id      BigInt
+  recorded_by_id  BigInt?
+
+  patient Patient @relation(fields: [patient_id], references: [id], onDelete: Cascade)
+  alerts  Alert[]
+
+  @@index([patient_id])
+  @@index([recorded_at])
+  @@index([recorded_by_id])
+  @@index([type])
+  @@index([is_draft])
+  @@index([is_track])
+  @@index([created_at])
+  @@map("vitals")
+}
+
+model VitalAlert {
+  id            BigInt    @id @default(autoincrement())
+  uuid          String    @unique @default(uuid()) @db.Uuid
+  created_at    DateTime? @default(now()) @db.Timestamptz
+  updated_at    DateTime? @updatedAt @db.Timestamptz
+  type          String?   @db.VarChar(50)
+  min_normal    Float?
+  max_normal    Float?
+  min           Float?
+  max           Float?
+  alert_mediums Json?     @db.Json
+  send_alert    Boolean?  @default(false)
+  patient_id    BigInt
+  assign_to_id  BigInt?
+
+  patient Patient @relation(fields: [patient_id], references: [id], onDelete: Cascade)
+
+  @@index([patient_id])
+  @@index([assign_to_id])
+  @@index([created_at])
+  @@map("vital_alerts")
+}
+
+model VitalReviewNote {
+  id             BigInt    @id @default(autoincrement())
+  uuid           String    @unique @default(uuid()) @db.Uuid
+  created_at     DateTime? @default(now()) @db.Timestamptz
+  updated_at     DateTime? @updatedAt @db.Timestamptz
+  reviewed_note  String?   @db.Text
+  reviewed_at    DateTime? @default(now()) @db.Timestamptz
+  patient_id     BigInt
+  reviewed_by_id BigInt?
+
+  patient Patient @relation(fields: [patient_id], references: [id], onDelete: Cascade)
+
+  @@index([patient_id])
+  @@index([reviewed_by_id])
+  @@index([created_at])
+  @@map("vital_review_notes")
+}
+
+model Alert {
+  id             BigInt    @id @default(autoincrement())
+  uuid           String    @unique @default(uuid()) @db.Uuid
+  created_at     DateTime? @default(now()) @db.Timestamptz
+  updated_at     DateTime? @updatedAt @db.Timestamptz
+  normal_range   String?   @db.VarChar(50)
+  vital_value    String?   @db.VarChar(50)
+  severity       String?   @db.VarChar(20)
+  status         String?   @db.VarChar(20)
+  flag           String?   @db.VarChar(10)
+  note           String?   @db.Text
+  due_at         DateTime? @db.Timestamptz
+  resolved_at    DateTime? @db.Timestamptz
+  resolved_note  String?   @db.Text
+  last_notify_at DateTime? @db.Timestamptz
+  vital_id       BigInt?
+  assigned_to_id BigInt?
+  assigned_by_id BigInt?
+  resolved_by_id BigInt?
+
+  vital Vital? @relation(fields: [vital_id], references: [id])
+
+  @@index([vital_id])
+  @@index([assigned_to_id])
+  @@index([status])
+  @@index([created_at])
+  @@map("alerts")
+}
+
+// -------------------------------------------------- enrolment and careplan --
+
+model CarePlanEnrollment {
+  id                  BigInt    @id @default(autoincrement())
+  uuid                String    @unique @default(uuid()) @db.Uuid
+  created_at          DateTime? @default(now()) @db.Timestamptz
+  updated_at          DateTime? @updatedAt @db.Timestamptz
+  category            String?   @db.VarChar(25)
+  enrolled_at         DateTime? @default(now()) @db.Timestamptz
+  is_billable         Boolean?  @default(false)
+  consent_form_type   String?   @db.VarChar(100)
+  consent_signed_at   DateTime? @db.Timestamptz
+  consent_file        String?   @db.Text
+  signed_consent_file String?   @db.Text
+  note                String?   @db.Text
+  unenrolled          Boolean?  @default(false)
+  unenrolled_status   String?   @db.VarChar(100)
+  unenrolled_note     String?   @db.Text
+  unenrolled_at       DateTime? @db.Timestamptz
+  termination_letter  String?   @db.VarChar(100)
+  is_declined         Boolean?  @default(false)
+  declined_at         DateTime? @db.Timestamptz
+  declined_note       String?   @db.Text
+  patient_id          BigInt
+  unenrolled_by_id    BigInt?
+  declined_by_id      BigInt?
+  updated_by_id       BigInt?
+
+  patient Patient @relation(fields: [patient_id], references: [id], onDelete: Cascade)
+
+  @@index([patient_id])
+  @@index([category])
+  @@index([created_at])
+  @@map("care_plan_enrollments")
+}
+
+model AdditionalConsentTemplate {
+  id                BigInt    @id @default(autoincrement())
+  uuid              String    @unique @default(uuid()) @db.Uuid
+  created_at        DateTime? @default(now()) @db.Timestamptz
+  updated_at        DateTime? @updatedAt @db.Timestamptz
+  title             String?   @db.VarChar(255)
+  description       String?   @db.Text
+  template_body     String?   @db.Text
+  achieved          Boolean?  @default(false)
+  provider_group_id BigInt?
+  created_by_id     BigInt?
+  updated_by_id     BigInt?
+  achieved_by_id    BigInt?
+
+  provider_group ProviderGroup? @relation(fields: [provider_group_id], references: [id])
+
+  @@index([provider_group_id])
+  @@index([created_at])
+  @@map("additional_consent_templates")
+}
+
+model PatientCarePlan {
+  id                 BigInt    @id @default(autoincrement())
+  uuid               String    @unique @default(uuid()) @db.Uuid
+  created_at         DateTime? @default(now()) @db.Timestamptz
+  updated_at         DateTime? @updatedAt @db.Timestamptz
+  program            String?   @db.VarChar(10)
+  added_at           DateTime? @default(now()) @db.Timestamptz
+  assigned_status    String?   @db.VarChar(100)
+  current_section    String?   @db.VarChar(100)
+  condition_icd_code Json?     @db.Json
+  consent_signed     Boolean?  @default(false)
+  consent_signed_at  DateTime? @db.Timestamptz
+  sign_off_at        DateTime? @db.Timestamptz
+  sign_off_note      String?   @db.Text
+  is_signed_off      Boolean?  @default(false)
+  finished_at        DateTime? @db.Timestamptz
+  is_stoped          Boolean?  @default(false)
+  stoped_on          DateTime? @db.Timestamptz
+  stoped_note        String?   @db.Text
+  is_discard         Boolean?  @default(false)
+  discard_on         DateTime? @db.Timestamptz
+  discard_note       String?   @db.Text
+  transfer_stoped    Boolean?  @default(false)
+  patient_id         BigInt
+  careplan_id        BigInt?
+  added_by_id        BigInt?
+  sign_off_by_id     BigInt?
+  stoped_by_id       BigInt?
+  discard_by_id      BigInt?
+  transfer_by_id     BigInt?
+
+  patient  Patient   @relation(fields: [patient_id], references: [id], onDelete: Cascade)
+  careplan CarePlan? @relation(fields: [careplan_id], references: [id])
+
+  @@index([patient_id])
+  @@index([careplan_id])
+  @@index([program])
+  @@index([created_at])
+  @@map("patient_care_plans")
+}
+
+model CarePlanQuestion {
+  id            BigInt    @id @default(autoincrement())
+  uuid          String    @unique @default(uuid()) @db.Uuid
+  created_at    DateTime? @default(now()) @db.Timestamptz
+  updated_at    DateTime? @updatedAt @db.Timestamptz
+  title         String?   @db.Text
+  description   String?   @db.VarChar(255)
+  type          String?   @db.VarChar(50)
+  question_type String?   @db.VarChar(50)
+  choices       Json?     @db.Json
+  careplan_id   BigInt?
+  condition_id  BigInt?
+
+  careplan  CarePlan?          @relation(fields: [careplan_id], references: [id], onDelete: Cascade)
+  condition Condition?         @relation(fields: [condition_id], references: [id])
+  responses CarePlanResponse[]
+
+  @@index([careplan_id])
+  @@index([condition_id])
+  @@map("care_plan_questions")
+}
+
+model CarePlanResponse {
+  id            BigInt    @id @default(autoincrement())
+  uuid          String    @unique @default(uuid()) @db.Uuid
+  created_at    DateTime? @default(now()) @db.Timestamptz
+  updated_at    DateTime? @updatedAt @db.Timestamptz
+  responses     Json?     @db.Json
+  is_discard    Boolean?  @default(false)
+  discard_on    DateTime? @db.Timestamptz
+  discard_note  String?   @db.Text
+  careplan_id   BigInt?
+  patient_id    BigInt
+  question_id   BigInt?
+  discard_by_id BigInt?
+
+  patient  Patient           @relation(fields: [patient_id], references: [id], onDelete: Cascade)
+  careplan CarePlan?         @relation(fields: [careplan_id], references: [id])
+  question CarePlanQuestion? @relation(fields: [question_id], references: [id])
+
+  @@index([patient_id])
+  @@index([careplan_id])
+  @@index([question_id])
+  @@map("care_plan_responses")
+}
+
+model CarePlanProgress {
+  id              BigInt    @id @default(autoincrement())
+  uuid            String    @unique @default(uuid()) @db.Uuid
+  created_at      DateTime? @default(now()) @db.Timestamptz
+  updated_at      DateTime? @updatedAt @db.Timestamptz
+  progress        Float?
+  title           String?   @db.Text
+  note            String?   @db.Text
+  initial_comment String?   @db.Text
+  type            String?   @db.VarChar(255)
+  status          String?   @db.VarChar(100)
+  completed_at    DateTime? @db.Timestamptz
+  completed_date  DateTime? @db.Timestamptz
+  is_discard      Boolean?  @default(false)
+  discard_on      DateTime? @db.Timestamptz
+  discard_note    String?   @db.Text
+  patient_id      BigInt
+  careplan_id     BigInt?
+  updated_by_id   BigInt?
+  discard_by_id   BigInt?
+
+  patient  Patient   @relation(fields: [patient_id], references: [id], onDelete: Cascade)
+  careplan CarePlan? @relation(fields: [careplan_id], references: [id])
+
+  @@index([patient_id])
+  @@index([careplan_id])
+  @@index([status])
+  @@map("care_plan_progress")
+}
+
+model CarePlanProviderReview {
+  id                           BigInt    @id @default(autoincrement())
+  uuid                         String    @unique @default(uuid()) @db.Uuid
+  created_at                   DateTime? @default(now()) @db.Timestamptz
+  updated_at                   DateTime? @updatedAt @db.Timestamptz
+  reviewed_at                  DateTime? @default(now()) @db.Timestamptz
+  initial_review_note          String?   @db.Text
+  treatment_test_note          String?   @db.Text
+  referral_note                String?   @db.Text
+  community_resource_note      String?   @db.Text
+  medication_change            String?   @db.Text
+  health_education_need        String?   @db.Text
+  diet_change                  String?   @db.Text
+  exercise_change              String?   @db.Text
+  stress_management_assistance String?   @db.Text
+  safety_recommendation        String?   @db.Text
+  other_habit_to_change        String?   @db.Text
+  visit_frequency              String?   @db.Text
+  other_note                   String?   @db.Text
+  general_note                 String?   @db.Text
+  note                         String?   @db.Text
+  signature                    String?   @db.Text
+  is_offline_review            Boolean?  @default(false)
+  offline_reviewed_at          DateTime? @db.Timestamptz
+  offline_reviewed_by          String?   @db.VarChar(255)
+  offline_reviewed_file        String?   @db.Text
+  patient_id                   BigInt
+  reviewed_by_id               BigInt?
+
+  patient Patient @relation(fields: [patient_id], references: [id], onDelete: Cascade)
+
+  @@index([patient_id])
+  @@index([reviewed_by_id])
+  @@index([created_at])
+  @@map("care_plan_provider_reviews")
+}
+
+model CarePlanMonthlyUpdate {
+  id            BigInt    @id @default(autoincrement())
+  uuid          String    @unique @default(uuid()) @db.Uuid
+  created_at    DateTime? @default(now()) @db.Timestamptz
+  updated_at    DateTime? @updatedAt @db.Timestamptz
+  updated_on    DateTime? @default(now()) @db.Timestamptz
+  type          String?   @db.VarChar(255)
+  note          String?   @db.Text
+  file          String?   @db.Text
+  is_deleted    Boolean?  @default(false)
+  deleted_at    DateTime? @db.Timestamptz
+  deleted_note  String?   @db.Text
+  patient_id    BigInt
+  updated_by_id BigInt?
+  deleted_by_id BigInt?
+
+  patient Patient @relation(fields: [patient_id], references: [id], onDelete: Cascade)
+
+  @@index([patient_id])
+  @@index([created_at])
+  @@map("care_plan_monthly_updates")
+}
+
+// ------------------------------------------------------------- assessments --
+
+model Assessment {
+  id                BigInt    @id @default(autoincrement())
+  uuid              String    @unique @default(uuid()) @db.Uuid
+  created_at        DateTime? @default(now()) @db.Timestamptz
+  updated_at        DateTime? @updatedAt @db.Timestamptz
+  title             String?   @db.VarChar(255)
+  description       String?   @db.Text
+  category          String?   @db.VarChar(50)
+  flag              String?   @db.VarChar(50)
+  frequencey        String?   @db.VarChar(20)
+  tags              Json?     @db.Json
+  font_icons        Json?     @db.Json
+  is_active         Boolean?  @default(true)
+  is_archieved      Boolean?  @default(false)
+  is_nas_assessment Boolean?  @default(false)
+  creator_id        BigInt?
+  provider_group_id BigInt?
+
+  provider_group ProviderGroup?       @relation(fields: [provider_group_id], references: [id])
+  questions      AssessmentQuestion[]
+  assigned       AssignedAssessment[]
+
+  @@index([provider_group_id])
+  @@index([category])
+  @@index([created_at])
+  @@map("assessments")
+}
+
+model AssessmentQuestion {
+  id            BigInt    @id @default(autoincrement())
+  uuid          String    @unique @default(uuid()) @db.Uuid
+  created_at    DateTime? @default(now()) @db.Timestamptz
+  updated_at    DateTime? @updatedAt @db.Timestamptz
+  title         String    @db.VarChar(255)
+  description   String?   @db.Text
+  type          String    @db.VarChar(50)
+  choices       Json?     @db.Json
+  assessment_id BigInt
+  creator_id    BigInt?
+
+  assessment     Assessment                 @relation(fields: [assessment_id], references: [id], onDelete: Cascade)
+  choice_options AssessmentQuestionChoice[]
+
+  @@index([assessment_id])
+  @@map("assessment_questions")
+}
+
+model AssessmentQuestionChoice {
+  id           BigInt    @id @default(autoincrement())
+  uuid         String    @unique @default(uuid()) @db.Uuid
+  created_at   DateTime? @default(now()) @db.Timestamptz
+  updated_at   DateTime? @updatedAt @db.Timestamptz
+  title        String    @db.VarChar(255)
+  nas_class    String?   @db.VarChar(10)
+  is_free_text Boolean?  @default(false)
+  question_id  BigInt
+  creator_id   BigInt?
+
+  question AssessmentQuestion @relation(fields: [question_id], references: [id], onDelete: Cascade)
+
+  @@index([question_id])
+  @@map("assessment_question_choices")
+}
+
+model AssignedAssessment {
+  id                 BigInt    @id @default(autoincrement())
+  uuid               String    @unique @default(uuid()) @db.Uuid
+  created_at         DateTime? @default(now()) @db.Timestamptz
+  updated_at         DateTime? @updatedAt @db.Timestamptz
+  assigned_at        DateTime? @default(now()) @db.Timestamptz
+  responsible_person String?   @db.VarChar(50)
+  program            String?   @db.VarChar(10)
+  is_scheduled       Boolean?  @default(false)
+  scheduled_at       DateTime? @db.Timestamptz
+  scheduled_id       String?   @db.VarChar(150)
+  scheduled_medium   String?   @db.VarChar(10)
+  is_archived        Boolean?  @default(false)
+  assessment_id      BigInt
+  patient_id         BigInt
+  assigned_by_id     BigInt?
+  scheduled_by_id    BigInt?
+
+  assessment Assessment          @relation(fields: [assessment_id], references: [id], onDelete: Cascade)
+  patient    Patient             @relation(fields: [patient_id], references: [id], onDelete: Cascade)
+  response   AssessmentResponse?
+
+  @@index([assessment_id])
+  @@index([patient_id])
+  @@index([scheduled_at])
+  @@map("assigned_assessments")
+}
+
+model AssessmentResponse {
+  id                    BigInt    @id @default(autoincrement())
+  uuid                  String    @unique @default(uuid()) @db.Uuid
+  created_at            DateTime? @default(now()) @db.Timestamptz
+  updated_at            DateTime? @updatedAt @db.Timestamptz
+  responses             Json?     @db.JsonB
+  response_at           DateTime? @db.Timestamptz
+  review_at             DateTime? @db.Timestamptz
+  review_note           String?   @db.Text
+  is_new                Boolean?  @default(true)
+  pdf_responses         String?   @db.Text
+  response_pdf          String?   @db.VarChar(100)
+  careplan_data         Json?     @db.JsonB
+  careplan_response_ids Json?     @db.Json
+  assignement_id        BigInt    @unique
+  review_by_id          BigInt?
+
+  assignment AssignedAssessment @relation(fields: [assignement_id], references: [id], onDelete: Cascade)
+
+  @@index([created_at])
+  @@map("assessment_responses")
+}
+
+model Screening {
+  id                 BigInt    @id @default(autoincrement())
+  uuid               String    @unique @default(uuid()) @db.Uuid
+  created_at         DateTime? @default(now()) @db.Timestamptz
+  updated_at         DateTime? @updatedAt @db.Timestamptz
+  responses          Json?     @db.Json
+  screening_at       DateTime? @default(now()) @db.Timestamptz
+  responsible_person String?   @db.VarChar(50)
+  is_scheduled       Boolean?  @default(false)
+  scheduled_at       DateTime? @db.Timestamptz
+  scheduled_medium   String?   @db.VarChar(10)
+  scheduled_sections Json?     @db.Json
+  blueprint_meta     Json?     @db.Json
+  score              Int?
+  is_archived        Boolean?  @default(false)
+  patient_id         BigInt
+  screening_by_id    BigInt?
+  scheduled_by_id    BigInt?
+
+  patient Patient @relation(fields: [patient_id], references: [id], onDelete: Cascade)
+
+  @@index([patient_id])
+  @@index([screening_at])
+  @@map("screenings")
+}
+
+// --------------------------------------------------------------- education --
+
+model EducationSchedule {
+  id              BigInt    @id @default(autoincrement())
+  uuid            String    @unique @default(uuid()) @db.Uuid
+  created_at      DateTime? @default(now()) @db.Timestamptz
+  updated_at      DateTime? @updatedAt @db.Timestamptz
+  send_at         DateTime? @default(now()) @db.Timestamptz
+  status          String?   @db.VarChar(50)
+  cancelled_at    DateTime? @db.Timestamptz
+  education_id    BigInt
+  cancelled_by_id BigInt?
+  scheduled_by_id BigInt?
+  send_by_id      BigInt?
+  updated_by_id   BigInt?
+
+  education EducationMaterial          @relation(fields: [education_id], references: [id], onDelete: Cascade)
+  patients  EducationSchedulePatient[]
+
+  @@index([education_id])
+  @@index([send_at])
+  @@map("education_schedules")
+}
+
+model EducationSchedulePatient {
+  id                   BigInt @id @default(autoincrement())
+  educationschedule_id BigInt
+  patient_id           BigInt
+
+  education_schedule EducationSchedule @relation(fields: [educationschedule_id], references: [id], onDelete: Cascade)
+  patient            Patient           @relation(fields: [patient_id], references: [id], onDelete: Cascade)
+
+  @@unique([educationschedule_id, patient_id])
+  @@index([educationschedule_id])
+  @@index([patient_id])
+  @@map("education_schedule_patients")
+}
+
+// ----------------------------------------------------------- communication --
+
+model Conversation {
+  id         String    @id @default(uuid()) @db.Uuid
+  created_at DateTime? @default(now()) @db.Timestamptz
+  updated_at DateTime? @updatedAt @db.Timestamptz
+
+  messages     ChatMessage[]
+  participants ChatParticipant[]
+
+  @@map("conversations")
+}
+
+model ChatParticipant {
+  id              String    @id @default(uuid()) @db.Uuid
+  is_online       Boolean?  @default(false)
+  last_online     DateTime? @db.Timestamptz
+  user_id         BigInt?   @unique
+  conversation_id String?   @db.Uuid
+
+  user         User?         @relation(fields: [user_id], references: [id])
+  conversation Conversation? @relation(fields: [conversation_id], references: [id])
+  messages     ChatMessage[]
+
+  @@index([conversation_id])
+  @@map("chat_participants")
+}
+
+model ChatMessage {
+  id              String    @id @default(uuid()) @db.Uuid
+  created_at      DateTime? @default(now()) @db.Timestamptz
+  updated_at      DateTime? @updatedAt @db.Timestamptz
+  content         String?   @db.Text
+  attachment      String?   @db.Text
+  attachment_ext  String?   @db.VarChar(100)
+  viewed          Boolean?  @default(false)
+  notified        Boolean?  @default(false)
+  conversation_id String?   @db.Uuid
+  sender_id       String?   @db.Uuid
+
+  conversation Conversation?    @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  sender       ChatParticipant? @relation(fields: [sender_id], references: [id])
+
+  @@index([conversation_id])
+  @@index([sender_id])
+  @@index([created_at])
+  @@map("chat_messages")
+}
+
+model SmsRecord {
+  id          BigInt    @id @default(autoincrement())
+  uuid        String    @unique @default(uuid()) @db.Uuid
+  created_at  DateTime? @default(now()) @db.Timestamptz
+  updated_at  DateTime? @updatedAt @db.Timestamptz
+  content     String?   @db.Text
+  sent_by     String?   @db.VarChar(10)
+  viewed      Boolean?  @default(false)
+  source      String?   @default("careos") @db.VarChar(20)
+  patient_id  BigInt?
+  provider_id BigInt?
+
+  patient Patient?         @relation(fields: [patient_id], references: [id])
+  media   SmsRecordMedia[]
+
+  @@index([patient_id])
+  @@index([provider_id])
+  @@index([created_at])
+  @@map("sms_records")
+}
+
+model SmsRecordMedia {
+  id         BigInt    @id @default(autoincrement())
+  uuid       String    @unique @default(uuid()) @db.Uuid
+  created_at DateTime? @default(now()) @db.Timestamptz
+  updated_at DateTime? @updatedAt @db.Timestamptz
+  file       String?   @db.Text
+  mime_type  String?   @db.VarChar(50)
+  sms_id     BigInt
+
+  sms SmsRecord @relation(fields: [sms_id], references: [id], onDelete: Cascade)
+
+  @@index([sms_id])
+  @@map("sms_record_media")
+}
+
+model TextMessageHistory {
+  uuid       String    @id @default(uuid()) @db.Uuid
+  created_at DateTime? @default(now()) @db.Timestamptz
+  updated_at DateTime? @updatedAt @db.Timestamptz
+  number     String?   @db.VarChar(15)
+  body       String?   @db.Text
+  status     String?   @db.VarChar(100)
+
+  @@index([number])
+  @@map("text_message_histories")
+}
+
+model BulkCommunication {
+  id            BigInt    @id @default(autoincrement())
+  uuid          String    @unique @default(uuid()) @db.Uuid
+  created_at    DateTime? @default(now()) @db.Timestamptz
+  updated_at    DateTime? @updatedAt @db.Timestamptz
+  sms_body      String?   @db.Text
+  email_body    String?   @db.Text
+  email_subject String?   @db.VarChar(255)
+  send_on       DateTime? @default(now()) @db.Timestamptz
+  sent_by_id    BigInt?
+
+  @@index([send_on])
+  @@map("bulk_communications")
+}
+
+model UserNotification {
+  id                   BigInt    @id @default(autoincrement())
+  uuid                 String    @unique @default(uuid()) @db.Uuid
+  created_at           DateTime? @default(now()) @db.Timestamptz
+  updated_at           DateTime? @updatedAt @db.Timestamptz
+  notify_for           String?   @db.VarChar(255)
+  notification_type    String?   @db.VarChar(50)
+  is_email             Boolean?  @default(false)
+  is_text              Boolean?  @default(false)
+  is_push_notification Boolean?  @default(false)
+  user_id              BigInt
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@map("user_notifications")
+}
+
+// ------------------------------------------------- settings and time logs --
+
+model Role {
+  id                BigInt    @id @default(autoincrement())
+  uuid              String    @unique @default(uuid()) @db.Uuid
+  created_at        DateTime? @default(now()) @db.Timestamptz
+  updated_at        DateTime? @updatedAt @db.Timestamptz
+  name              String?   @db.VarChar(100)
+  description       String?   @db.Text
+  status            String?   @db.VarChar(50)
+  permissions       Json?     @db.Json
+  provider_group_id BigInt?
+  creator_id        BigInt?
+
+  provider_group ProviderGroup? @relation(fields: [provider_group_id], references: [id])
+
+  @@index([provider_group_id])
+  @@map("roles")
+}
+
+model EmailAddress {
+  id       BigInt   @id @default(autoincrement())
+  email    String?  @unique @db.VarChar(254)
+  verified Boolean? @default(false)
+  primary  Boolean? @default(true)
+  user_id  BigInt
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@map("email_addresses")
+}
+
+model TimeLog {
+  id                     BigInt    @id @default(autoincrement())
+  uuid                   String    @unique @default(uuid()) @db.Uuid
+  created_at             DateTime? @default(now()) @db.Timestamptz
+  updated_at             DateTime? @updatedAt @db.Timestamptz
+  start_at               DateTime? @default(now()) @db.Timestamptz
+  end_at                 DateTime? @db.Timestamptz
+  time_spent             Float?
+  total_seconds          Float?
+  note                   String?   @db.Text
+  log_as                 String?   @db.VarChar(255)
+  log_for                String?   @db.VarChar(100)
+  program                String?   @db.VarChar(100)
+  resource               String?   @db.VarChar(100)
+  is_billable            Boolean?  @default(false)
+  is_manual              Boolean?  @default(false)
+  intervals              Json?     @db.Json
+  call_file              String?   @db.Text
+  call_status            String?   @db.VarChar(255)
+  is_deleted             Boolean?  @default(false)
+  deleted_at             DateTime? @db.Timestamptz
+  deleted_note           String?   @db.Text
+  deleted_by_id          BigInt?
+  log_for_patient_id     BigInt?
+  log_by_provider_id     BigInt?
+  permorm_by_provider_id BigInt?
+
+  patient        Patient?          @relation(fields: [log_for_patient_id], references: [id])
+  time_intervals TimeLogInterval[]
+
+  pcm_billing_time_logs     PcmBillingTimeLog[]
+  pcm_billing_pcm_time_logs PcmBillingPcmTimeLog[]
+
+  @@index([log_for_patient_id])
+  @@index([log_by_provider_id])
+  @@index([program])
+  @@index([start_at])
+  @@map("time_logs")
+}
+
+model TimeLogInterval {
+  id          String    @id @default(uuid()) @db.Uuid
+  start       DateTime? @default(now()) @db.Timestamptz
+  end         DateTime? @db.Timestamptz
+  time_log_id BigInt
+
+  time_log TimeLog @relation(fields: [time_log_id], references: [id], onDelete: Cascade)
+
+  @@index([time_log_id])
+  @@map("time_log_intervals")
+}
+
+// ------------------------------------------------------------------ billing --
+// One row per patient per month, with the time logs that justify it joined
+// through two tables — all logged time, and the PCM-qualifying subset counted
+// separately. Ported from Zenara's core_pcmbilling; Zenara has no RTM billing.
+
+model PcmBilling {
+  id                  BigInt    @id @default(autoincrement())
+  uuid                String    @unique @default(uuid()) @db.Uuid
+  created_at          DateTime? @default(now()) @db.Timestamptz
+  updated_at          DateTime? @updatedAt @db.Timestamptz
+  time_spends         Float?    @default(0)
+  pcm_time_spends     Float?    @default(0)
+  month               Int?
+  year                Int?
+  billing_flag        String?   @db.VarChar(255)
+  billing_status      String?   @default("pending") @db.VarChar(100)
+  billable_date       DateTime? @db.Date
+  submitted_at        DateTime? @db.Timestamptz
+  submitted_cpt_codes Json?     @db.Json
+  revenue             Float?    @default(0)
+  patient_id          BigInt
+
+  patient       Patient                @relation(fields: [patient_id], references: [id], onDelete: Cascade)
+  time_logs     PcmBillingTimeLog[]
+  pcm_time_logs PcmBillingPcmTimeLog[]
+  notes         BillingNote[]
+
+  @@unique([patient_id, month, year])
+  @@index([patient_id])
+  @@index([billing_status])
+  @@index([month, year])
+  @@map("pcm_billings")
+}
+
+model PcmBillingTimeLog {
+  id            BigInt @id @default(autoincrement())
+  pcmbilling_id BigInt
+  timelog_id    BigInt
+
+  pcm_billing PcmBilling @relation(fields: [pcmbilling_id], references: [id], onDelete: Cascade)
+  time_log    TimeLog    @relation(fields: [timelog_id], references: [id], onDelete: Cascade)
+
+  @@unique([pcmbilling_id, timelog_id])
+  @@index([pcmbilling_id])
+  @@index([timelog_id])
+  @@map("pcm_billing_time_logs")
+}
+
+model PcmBillingPcmTimeLog {
+  id            BigInt @id @default(autoincrement())
+  pcmbilling_id BigInt
+  timelog_id    BigInt
+
+  pcm_billing PcmBilling @relation(fields: [pcmbilling_id], references: [id], onDelete: Cascade)
+  time_log    TimeLog    @relation(fields: [timelog_id], references: [id], onDelete: Cascade)
+
+  @@unique([pcmbilling_id, timelog_id])
+  @@index([pcmbilling_id])
+  @@index([timelog_id])
+  @@map("pcm_billing_pcm_time_logs")
+}
+
+/// Status-change trail for a billing row; `billing_type` says which table
+/// `billing_id` points at, exactly as Zenara's core_billingnote does.
+model BillingNote {
+  id             BigInt    @id @default(autoincrement())
+  uuid           String    @unique @default(uuid()) @db.Uuid
+  created_at     DateTime? @default(now()) @db.Timestamptz
+  updated_at     DateTime? @updatedAt @db.Timestamptz
+  billing_type   String?   @db.VarChar(50)
+  note           String?   @db.Text
+  old_status     String?   @db.VarChar(100)
+  new_status     String?   @db.VarChar(100)
+  created_by_id  BigInt?
+  pcm_billing_id BigInt
+
+  pcm_billing PcmBilling @relation(fields: [pcm_billing_id], references: [id], onDelete: Cascade)
+
+  @@index([pcm_billing_id])
+  @@index([created_at])
+  @@map("billing_notes")
 }

@@ -3,11 +3,6 @@ export interface JwtPayload {
   user_id: string;
   id: number;
   jti: string;
-  admin: {
-    userId: number;
-    isTenantAdmin: boolean;
-    isSuperAdmin: boolean;
-  };
   provider_id: number | null;
   language: string;
   iat?: number;
@@ -19,8 +14,6 @@ export interface AuthenticatedUser {
   uuid: string;
   email: string | null;
   providerId: bigint | null;
-  isTenantAdmin: boolean;
-  isSuperTenantAdmin: boolean;
   language: string;
 }
 

@@ -62,11 +62,6 @@ export class CreateProviderDto {
   @ApiPropertyOptional({ default: false })
   @IsOptional()
   @IsBoolean()
-  is_tenant_admin?: boolean;
-
-  @ApiPropertyOptional({ default: false })
-  @IsOptional()
-  @IsBoolean()
   is_clinical_manager?: boolean;
 
   @ApiPropertyOptional({ example: "1234567890" })

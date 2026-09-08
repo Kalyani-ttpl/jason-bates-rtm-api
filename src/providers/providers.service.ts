@@ -57,8 +57,6 @@ export class ProvidersService extends BaseService {
             isActive: true,
             isProvider: true,
             isPatient: false,
-            isTenantAdmin: data.is_tenant_admin ?? false,
-            isSuperTenantAdmin: false,
           },
           select: { id: true },
         });
@@ -118,7 +116,6 @@ export class ProvidersService extends BaseService {
       state_license: data.state_license,
       license_number: data.license_number,
       taxonomyCode: data.taxonomyCode,
-      is_tenant_admin: data.is_tenant_admin ?? false,
       is_clinical_manager: data.is_clinical_manager ?? false,
       is_auto_timelog: data.is_auto_timelog ?? false,
       auto_timelog_message: data.auto_timelog_message,

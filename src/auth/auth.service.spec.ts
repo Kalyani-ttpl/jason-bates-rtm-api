@@ -21,8 +21,6 @@ describe("AuthService", () => {
     picture: null,
     isActive: true,
     isProvider: true,
-    isTenantAdmin: true,
-    isSuperTenantAdmin: false,
   });
 
   const login = () => ({
@@ -75,7 +73,6 @@ describe("AuthService", () => {
       expect(payload.provider_id).toBe(20);
       expect(payload.language).toBe("es");
       expect(payload.token_type).toBe("access");
-      expect(payload.admin.isTenantAdmin).toBe(true);
     });
 
     it("rejects an unknown email", async () => {

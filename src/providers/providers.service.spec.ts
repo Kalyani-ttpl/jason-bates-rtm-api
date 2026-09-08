@@ -56,7 +56,6 @@ describe("ProvidersService", () => {
         isActive: true,
         isProvider: true,
         isPatient: false,
-        isSuperTenantAdmin: false,
       }),
       select: { id: true },
     });
