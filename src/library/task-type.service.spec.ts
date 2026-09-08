@@ -20,7 +20,7 @@ describe("TaskTypeService", () => {
       update: jest.fn().mockResolvedValue(row),
       delete: jest.fn().mockResolvedValue(row),
     };
-    prisma = { task_type: taskType };
+    prisma = { taskType };
     service = new TaskTypeService(prisma);
   });
 

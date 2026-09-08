@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
+import { Prisma } from "@prisma/client";
 import { BaseService } from "../common/base.service";
 import { PrismaService } from "../prisma/prisma.service";
 import {
@@ -6,6 +7,16 @@ import {
   QueryIcdCodesDto,
   UpdateIcdCodeDto,
 } from "./dto/icd-code.dto";
+
+/** The API speaks snake_case; `icd_codes` follows `schema (2).prisma` camelCase. */
+const SORT_FIELDS: Record<string, string> = {
+  created_at: "createdAt",
+  updated_at: "updatedAt",
+  description: "description",
+  code: "code",
+  status: "status",
+  order_number: "orderNumber",
+};
 
 @Injectable()
 export class IcdCodeService extends BaseService {
@@ -18,7 +29,7 @@ export class IcdCodeService extends BaseService {
     try {
       const prisma = this.prisma;
 
-      const existing = await prisma.icd_code.findFirst({
+      const existing = await prisma.icdCode.findFirst({
         where: { code: data.code },
       });
       if (existing) {
@@ -27,8 +38,8 @@ export class IcdCodeService extends BaseService {
         );
       }
 
-      const created = await prisma.icd_code.create({
-        data,
+      const created = await prisma.icdCode.create({
+        data: this.toPrisma(data),
       });
 
       return this.toResponse(created);
@@ -46,7 +57,7 @@ export class IcdCodeService extends BaseService {
       const prisma = this.prisma;
 
       const submitted = codes.map((entry) => entry.code);
-      const existing = await prisma.icd_code.findMany({
+      const existing = await prisma.icdCode.findMany({
         where: { code: { in: submitted } },
         select: { code: true },
       });
@@ -54,8 +65,8 @@ export class IcdCodeService extends BaseService {
 
       const toCreate = codes.filter((entry) => !taken.has(entry.code));
       if (toCreate.length) {
-        await prisma.icd_code.createMany({
-          data: toCreate,
+        await prisma.icdCode.createMany({
+          data: toCreate.map((entry) => this.toPrisma(entry)),
         });
       }
 
@@ -79,13 +90,13 @@ export class IcdCodeService extends BaseService {
         Math.max(Number(param.page_size) || 15, 1),
         100,
       );
-      const sortBy = param.sort_by ?? "created_at";
+      const sortBy = SORT_FIELDS[param.sort_by ?? "created_at"];
       const orderBy = param.order_by ?? "desc";
 
       const where = {
         ...(param.status && { status: param.status }),
         ...(param.is_unspecified && {
-          is_unspecified: param.is_unspecified === "true",
+          isUnspecified: param.is_unspecified === "true",
         }),
         ...(param.search && {
           OR: [
@@ -101,13 +112,13 @@ export class IcdCodeService extends BaseService {
       };
 
       const [rows, count] = await Promise.all([
-        prisma.icd_code.findMany({
+        prisma.icdCode.findMany({
           where,
           take: pageSize,
           skip: (pageNo - 1) * pageSize,
           orderBy: { [sortBy]: orderBy },
         }),
-        prisma.icd_code.count({ where }),
+        prisma.icdCode.count({ where }),
       ]);
 
       const totalPages = Math.ceil(count / pageSize);
@@ -124,7 +135,7 @@ export class IcdCodeService extends BaseService {
 
   async findOne(id: bigint) {
     try {
-      const found = await this.prisma.icd_code.findUnique({
+      const found = await this.prisma.icdCode.findUnique({
         where: { id },
       });
       this.throwNotFoundError(found, `ICD code with id '${id}' not found`);
@@ -140,11 +151,11 @@ export class IcdCodeService extends BaseService {
     try {
       const prisma = this.prisma;
 
-      const existing = await prisma.icd_code.findUnique({ where: { id } });
+      const existing = await prisma.icdCode.findUnique({ where: { id } });
       this.throwNotFoundError(existing, `ICD code with id '${id}' not found`);
 
       if (data.code) {
-        const duplicate = await prisma.icd_code.findFirst({
+        const duplicate = await prisma.icdCode.findFirst({
           where: { code: data.code, NOT: { id } },
         });
         if (duplicate) {
@@ -154,7 +165,10 @@ export class IcdCodeService extends BaseService {
         }
       }
 
-      const updated = await prisma.icd_code.update({ where: { id }, data });
+      const updated = await prisma.icdCode.update({
+        where: { id },
+        data: this.toPrisma(data),
+      });
       return this.toResponse(updated);
     } catch (error) {
       this.handleError(error, "Failed to update ICD code");
@@ -163,41 +177,58 @@ export class IcdCodeService extends BaseService {
 
   async remove(id: bigint) {
     try {
-      const existing = await this.prisma.icd_code.findUnique({
+      const existing = await this.prisma.icdCode.findUnique({
         where: { id },
       });
       this.throwNotFoundError(existing, `ICD code with id '${id}' not found`);
 
-      await this.prisma.icd_code.delete({ where: { id } });
+      await this.prisma.icdCode.delete({ where: { id } });
       return { detail: "ICD code deleted successfully", id };
     } catch (error) {
       this.handleError(error, "Failed to delete ICD code");
     }
   }
 
+  private toPrisma(data: UpdateIcdCodeDto): Prisma.IcdCodeCreateInput {
+    return {
+      ...(data.code !== undefined && { code: data.code }),
+      ...(data.description !== undefined && { description: data.description }),
+      ...(data.status !== undefined && { status: data.status }),
+      ...(data.is_unspecified !== undefined && {
+        isUnspecified: data.is_unspecified,
+      }),
+      ...(data.is_hipaa_covered !== undefined && {
+        isHipaaCovered: data.is_hipaa_covered,
+      }),
+      ...(data.order_number !== undefined && {
+        orderNumber: data.order_number,
+      }),
+    };
+  }
+
   private toResponse(item: {
     id: bigint;
     uuid: string;
-    created_at: Date | null;
-    updated_at: Date | null;
+    createdAt: Date | null;
+    updatedAt: Date | null;
     description: string | null;
     code: string | null;
     status: string;
-    is_unspecified: boolean;
-    is_hipaa_covered: string | null;
-    order_number: string | null;
+    isUnspecified: boolean;
+    isHipaaCovered: string | null;
+    orderNumber: string | null;
   }) {
     return {
       id: item.id,
       uuid: item.uuid,
-      created_at: item.created_at,
-      updated_at: item.updated_at,
+      created_at: item.createdAt,
+      updated_at: item.updatedAt,
       description: item.description,
       code: item.code,
       status: item.status,
-      is_unspecified: item.is_unspecified,
-      is_hipaa_covered: item.is_hipaa_covered,
-      order_number: item.order_number,
+      is_unspecified: item.isUnspecified,
+      is_hipaa_covered: item.isHipaaCovered,
+      order_number: item.orderNumber,
       value: item.id,
       label: item.description
         ? `${item.code} - ${item.description}`

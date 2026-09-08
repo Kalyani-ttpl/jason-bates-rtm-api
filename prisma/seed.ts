@@ -24,7 +24,7 @@ const SEED = {
 
 /** Seeds one provider group and one admin provider to sign in with. */
 async function seed() {
-  const group = await prisma.provider_group.upsert({
+  const group = await prisma.providerGroup.upsert({
     where: { code: SEED.providerGroup.code },
     update: {},
     create: {
@@ -34,19 +34,19 @@ async function seed() {
     },
   });
 
-  const user = await prisma.user_account.upsert({
+  const user = await prisma.user.upsert({
     where: { email: SEED.provider.email },
     update: {},
     create: {
       email: SEED.provider.email,
       username: SEED.provider.email,
-      password: await bcrypt.hash(SEED.provider.password, 10),
-      first_name: SEED.provider.first_name,
-      last_name: SEED.provider.last_name,
-      is_active: true,
-      is_provider: true,
-      is_tenant_admin: true,
-      is_super_tenant_admin: true,
+      passwordHash: await bcrypt.hash(SEED.provider.password, 10),
+      firstName: SEED.provider.first_name,
+      lastName: SEED.provider.last_name,
+      isActive: true,
+      isProvider: true,
+      isTenantAdmin: true,
+      isSuperTenantAdmin: true,
     },
   });
 
@@ -68,7 +68,7 @@ async function seed() {
     },
   });
 
-  await prisma.provider_group_member.upsert({
+  await prisma.providerGroupMember.upsert({
     where: {
       provider_id_provider_group_id: {
         provider_id: provider.id,

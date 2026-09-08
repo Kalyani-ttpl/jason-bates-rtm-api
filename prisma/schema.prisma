@@ -6,34 +6,119 @@ datasource db {
   provider = "postgresql"
 }
 
-model user_account {
-  id                    BigInt    @id @default(autoincrement())
-  uuid                  String    @unique @default(uuid()) @db.Uuid
-  created_at            DateTime? @default(now()) @db.Timestamptz
-  updated_at            DateTime? @updatedAt @db.Timestamptz
-  password              String?   @db.VarChar(128)
-  username              String?   @unique @db.VarChar(150)
-  email                 String?   @unique @db.VarChar(254)
-  first_name            String?   @db.VarChar(255)
-  last_name             String?   @db.VarChar(255)
-  picture               String?   @db.Text
-  last_login            DateTime? @db.Timestamptz
-  date_joined           DateTime? @default(now()) @db.Timestamptz
-  is_superuser          Boolean?  @default(false)
-  is_staff              Boolean?  @default(false)
-  is_active             Boolean?  @default(true)
-  is_tenant_admin       Boolean?  @default(false)
-  is_super_tenant_admin Boolean?  @default(false)
-  is_provider           Boolean?  @default(false)
-  is_patient            Boolean?  @default(false)
-  is_deleted            Boolean?  @default(false)
+// User, IcdCode and CptCode follow `schema (2).prisma` — same table and column
+// names, so both codebases can share them. Columns we carry that it lacks are
+// appended below the shared block in each model.
 
-  added_by   provider[] @relation("provider_added_by")
-  deleted_by provider[] @relation("provider_deleted_by")
-  provider   provider?  @relation("provider_user")
+model User {
+  id                  BigInt    @id @default(autoincrement())
+  uuid                String    @unique @default(uuid()) @db.Uuid
+  email               String?   @unique @db.VarChar(254)
+  passwordHash        String?   @map("password_hash") @db.VarChar(128)
+  failedLoginAttempts Int       @default(0) @map("failed_login_attempts")
+  lockedUntil         DateTime? @map("locked_until") @db.Timestamptz(3)
+  passwordChangedAt   DateTime? @map("password_changed_at") @db.Timestamptz(3)
+  lastLoginAt         DateTime? @map("last_login_at") @db.Timestamptz(3)
+  createdAt           DateTime? @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime? @updatedAt @map("updated_at") @db.Timestamptz
+
+  username           String?   @unique @db.VarChar(150)
+  firstName          String?   @map("first_name") @db.VarChar(255)
+  lastName           String?   @map("last_name") @db.VarChar(255)
+  picture            String?   @db.Text
+  dateJoined         DateTime? @default(now()) @map("date_joined") @db.Timestamptz
+  isSuperuser        Boolean?  @default(false) @map("is_superuser")
+  isStaff            Boolean?  @default(false) @map("is_staff")
+  isActive           Boolean?  @default(true) @map("is_active")
+  isTenantAdmin      Boolean?  @default(false) @map("is_tenant_admin")
+  isSuperTenantAdmin Boolean?  @default(false) @map("is_super_tenant_admin")
+  isProvider         Boolean?  @default(false) @map("is_provider")
+  isPatient          Boolean?  @default(false) @map("is_patient")
+  isDeleted          Boolean?  @default(false) @map("is_deleted")
+
+  addedBy   Provider[] @relation("provider_added_by")
+  deletedBy Provider[] @relation("provider_deleted_by")
+  provider  Provider?  @relation("provider_user")
+
+  @@map("users")
 }
 
-model provider_group {
+model IcdCode {
+  id          BigInt    @id @default(autoincrement())
+  uuid        String    @unique @default(uuid()) @db.Uuid
+  code        String?   @unique @db.VarChar(200)
+  description String?   @db.VarChar(500)
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime? @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime? @updatedAt @map("updated_at") @db.Timestamptz
+
+  status         String  @default("active") @db.VarChar(20)
+  isUnspecified  Boolean @default(false) @map("is_unspecified")
+  isHipaaCovered String? @map("is_hipaa_covered") @db.VarChar(100)
+  orderNumber    String? @map("order_number") @db.VarChar(255)
+  conditionId    BigInt? @map("condition_id")
+
+  condition Condition? @relation(fields: [conditionId], references: [id])
+
+  @@index([description])
+  @@index([status])
+  @@index([conditionId])
+  @@index([createdAt])
+  @@map("icd_codes")
+}
+
+model CptCode {
+  id          BigInt    @id @default(autoincrement())
+  uuid        String    @unique @default(uuid()) @db.Uuid
+  code        String?   @unique @db.VarChar(255)
+  description String?   @db.VarChar(500)
+  amount      String?
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime? @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime? @updatedAt @map("updated_at") @db.Timestamptz
+
+  category     String? @db.VarChar(100)
+  globalPeriod Int?    @map("global_period")
+  status       String  @default("active") @db.VarChar(20)
+  isFavorite   Boolean @default(false) @map("is_favorite")
+
+  @@index([description])
+  @@index([category])
+  @@index([status])
+  @@index([createdAt])
+  @@map("cpt_codes")
+}
+
+model Address {
+  id         BigInt    @id @default(autoincrement())
+  uuid       String    @unique @default(uuid()) @db.Uuid
+  patientId  BigInt?   @map("patient_id")
+  employeeId BigInt?   @map("employee_id")
+  type       String?
+  line1      String?
+  line2      String?
+  city       String?
+  state      String?
+  postalCode String?   @map("postal_code")
+  country    String?
+  createdAt  DateTime? @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime? @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  providerGroupsPhysical ProviderGroup[] @relation("physical_address")
+  providerGroupsBilling  ProviderGroup[] @relation("billing_address")
+
+  @@index([patientId])
+  @@index([employeeId])
+  @@index([city, state])
+  @@index([postalCode])
+  @@map("addresses")
+}
+
+// The models below have no counterpart in `schema (2).prisma`. They keep their
+// Zenara-derived column names; only the model and table names take the
+// PascalCase / plural convention.
+
+model ProviderGroup {
   id                             BigInt    @id @default(autoincrement())
   uuid                           String    @unique @default(uuid()) @db.Uuid
   created_at                     DateTime? @default(now()) @db.Timestamptz
@@ -51,6 +136,12 @@ model provider_group {
   status                         String?   @db.VarChar(10)
   picture                        String?   @db.Text
   bio                            String?   @db.Text
+  caller_id                      String?   @db.VarChar(15)
+  caller_id_verified             Boolean?  @default(false)
+  physical_address_id            BigInt?
+  billing_address_id             BigInt?
+  device_vender_base_url         String?   @db.VarChar(200)
+  show_revenue                   Boolean?  @default(false)
   timezone                       String?   @db.VarChar
   communication_logo             String?   @db.Text
   consent_logo                   String?   @db.Text
@@ -61,16 +152,24 @@ model provider_group {
   disable_provider_emails        Boolean?  @default(false)
   disable_provider_notifications Boolean?  @default(false)
   disable_provider_sms           Boolean?  @default(false)
+  disable_patient_calls          Boolean?  @default(false)
+  disable_call_recording         Boolean?  @default(false)
 
-  members                     provider_group_member[]
-  task_type                   task_type[]
-  bulk_communication_template bulk_communication_template[]
-  careplan                    careplan[]
+  physical_address Address? @relation("physical_address", fields: [physical_address_id], references: [id])
+  billing_address  Address? @relation("billing_address", fields: [billing_address_id], references: [id])
 
+  members                     ProviderGroupMember[]
+  task_type                   TaskType[]
+  bulk_communication_template BulkCommunicationTemplate[]
+  careplan                    CarePlan[]
+
+  @@index([physical_address_id])
+  @@index([billing_address_id])
   @@index([created_at])
+  @@map("provider_groups")
 }
 
-model provider {
+model Provider {
   id                   BigInt    @id @default(autoincrement())
   uuid                 String    @unique @default(uuid()) @db.Uuid
   created_at           DateTime? @default(now()) @db.Timestamptz
@@ -99,6 +198,9 @@ model provider {
   state_license        String?   @db.VarChar(50)
   license_number       String?   @db.VarChar(50)
   taxonomyCode         String?   @db.VarChar(100)
+  caller_id            String?   @db.VarChar(15)
+  caller_id_verified   Boolean?  @default(false)
+  dynamic_caller_ids   Json?     @db.Json
   is_partner           Boolean?  @default(false)
   is_tenant_provider   Boolean?  @default(false)
   is_tenant_admin      Boolean?  @default(false)
@@ -113,75 +215,38 @@ model provider {
   added_by_id          BigInt?
   deleted_by_id        BigInt?
 
-  user       user_account?           @relation("provider_user", fields: [user_id], references: [id])
-  added_by   user_account?           @relation("provider_added_by", fields: [added_by_id], references: [id])
-  deleted_by user_account?           @relation("provider_deleted_by", fields: [deleted_by_id], references: [id])
-  groups     provider_group_member[]
+  user       User?                 @relation("provider_user", fields: [user_id], references: [id])
+  added_by   User?                 @relation("provider_added_by", fields: [added_by_id], references: [id])
+  deleted_by User?                 @relation("provider_deleted_by", fields: [deleted_by_id], references: [id])
+  groups     ProviderGroupMember[]
 
-  task_type          task_type[]
-  consent_created_by consent[]   @relation("consent_created_by")
-  consent_deleted_by consent[]   @relation("consent_deleted_by")
-  careplan           careplan[]
+  task_type          TaskType[]
+  consent_created_by Consent[]  @relation("consent_created_by")
+  consent_deleted_by Consent[]  @relation("consent_deleted_by")
+  careplan           CarePlan[]
 
   @@index([added_by_id])
   @@index([deleted_by_id])
   @@index([created_at])
+  @@map("providers")
 }
 
-model provider_group_member {
+model ProviderGroupMember {
   id                BigInt    @id @default(autoincrement())
   created_at        DateTime? @default(now()) @db.Timestamptz
   provider_id       BigInt
   provider_group_id BigInt
 
-  provider       provider       @relation(fields: [provider_id], references: [id])
-  provider_group provider_group @relation(fields: [provider_group_id], references: [id])
+  provider       Provider      @relation(fields: [provider_id], references: [id])
+  provider_group ProviderGroup @relation(fields: [provider_group_id], references: [id])
 
   @@unique([provider_id, provider_group_id])
   @@index([provider_id])
   @@index([provider_group_id])
+  @@map("provider_group_members")
 }
 
-model icd_code {
-  id               BigInt    @id @default(autoincrement())
-  uuid             String    @unique @default(uuid()) @db.Uuid
-  created_at       DateTime? @default(now()) @db.Timestamptz
-  updated_at       DateTime? @updatedAt @db.Timestamptz
-  code             String?   @unique @db.VarChar(200)
-  description      String?   @db.VarChar(500)
-  status           String    @default("active") @db.VarChar(20)
-  is_unspecified   Boolean   @default(false)
-  is_hipaa_covered String?   @db.VarChar(100)
-  order_number     String?   @db.VarChar(255)
-  condition_id     BigInt?
-
-  condition condition? @relation(fields: [condition_id], references: [id])
-
-  @@index([description])
-  @@index([status])
-  @@index([condition_id])
-  @@index([created_at])
-}
-
-model cpt_code {
-  id            BigInt    @id @default(autoincrement())
-  uuid          String    @unique @default(uuid()) @db.Uuid
-  created_at    DateTime? @default(now()) @db.Timestamptz
-  updated_at    DateTime? @updatedAt @db.Timestamptz
-  code          String?   @unique @db.VarChar(255)
-  description   String?   @db.VarChar(500)
-  category      String?   @db.VarChar(100)
-  global_period Int?
-  status        String    @default("active") @db.VarChar(20)
-  is_favorite   Boolean   @default(false)
-
-  @@index([description])
-  @@index([category])
-  @@index([status])
-  @@index([created_at])
-}
-
-model condition {
+model Condition {
   id          BigInt    @id @default(autoincrement())
   uuid        String    @unique @default(uuid()) @db.Uuid
   created_at  DateTime? @default(now()) @db.Timestamptz
@@ -194,13 +259,14 @@ model condition {
   for_rpm     Boolean?  @default(false)
   programs    Json?     @db.Json
 
-  questions condition_question[]
-  icd_codes icd_code[]
+  questions ConditionQuestion[]
+  icd_codes IcdCode[]
 
   @@index([created_at])
+  @@map("conditions")
 }
 
-model condition_question {
+model ConditionQuestion {
   id              BigInt    @id @default(autoincrement())
   uuid            String    @unique @default(uuid()) @db.Uuid
   condition_id    BigInt
@@ -211,13 +277,14 @@ model condition_question {
   choices         String?   @db.Text
   additional_note String?   @db.Text
 
-  condition condition @relation(fields: [condition_id], references: [id], onDelete: Cascade)
+  condition Condition @relation(fields: [condition_id], references: [id], onDelete: Cascade)
 
   @@index([condition_id])
   @@index([created_at])
+  @@map("condition_questions")
 }
 
-model task_type {
+model TaskType {
   id                BigInt    @id @default(autoincrement())
   uuid              String    @unique @default(uuid()) @db.Uuid
   created_at        DateTime? @default(now()) @db.Timestamptz
@@ -228,15 +295,16 @@ model task_type {
   provider_group_id BigInt?
   created_by_id     BigInt?
 
-  provider_group provider_group? @relation(fields: [provider_group_id], references: [id])
-  created_by     provider?       @relation(fields: [created_by_id], references: [id])
+  provider_group ProviderGroup? @relation(fields: [provider_group_id], references: [id])
+  created_by     Provider?      @relation(fields: [created_by_id], references: [id])
 
   @@index([provider_group_id])
   @@index([created_by_id])
   @@index([created_at])
+  @@map("task_types")
 }
 
-model bulk_communication_template {
+model BulkCommunicationTemplate {
   id                BigInt    @id @default(autoincrement())
   uuid              String    @unique @default(uuid()) @db.Uuid
   created_at        DateTime? @default(now()) @db.Timestamptz
@@ -251,15 +319,16 @@ model bulk_communication_template {
   updated_by_id     BigInt?
   achieved_by_id    BigInt?
 
-  provider_group provider_group?                       @relation(fields: [provider_group_id], references: [id])
-  revisions      bulk_communication_template_revision[]
+  provider_group ProviderGroup?                      @relation(fields: [provider_group_id], references: [id])
+  revisions      BulkCommunicationTemplateRevision[]
 
   @@index([provider_group_id])
   @@index([template_type])
   @@index([created_at])
+  @@map("bulk_communication_templates")
 }
 
-model bulk_communication_template_revision {
+model BulkCommunicationTemplateRevision {
   id             String    @id @default(uuid()) @db.Uuid
   template_id    BigInt
   created_at     DateTime? @default(now()) @db.Timestamptz
@@ -269,12 +338,13 @@ model bulk_communication_template_revision {
   new_content    String?   @db.Text
   revision_by_id BigInt?
 
-  template bulk_communication_template @relation(fields: [template_id], references: [id], onDelete: Cascade)
+  template BulkCommunicationTemplate @relation(fields: [template_id], references: [id], onDelete: Cascade)
 
   @@index([template_id])
+  @@map("bulk_communication_template_revisions")
 }
 
-model consent {
+model Consent {
   id            BigInt    @id @default(autoincrement())
   uuid          String    @unique @default(uuid()) @db.Uuid
   created_at    DateTime? @default(now()) @db.Timestamptz
@@ -287,14 +357,15 @@ model consent {
   deleted_at    DateTime? @db.Timestamptz
   is_deleted    Boolean   @default(false)
 
-  created_by provider? @relation("consent_created_by", fields: [created_by_id], references: [id])
-  deleted_by provider? @relation("consent_deleted_by", fields: [deleted_by_id], references: [id])
+  created_by Provider? @relation("consent_created_by", fields: [created_by_id], references: [id])
+  deleted_by Provider? @relation("consent_deleted_by", fields: [deleted_by_id], references: [id])
 
   @@index([program])
   @@index([created_at])
+  @@map("consents")
 }
 
-model careplan {
+model CarePlan {
   id                BigInt    @id @default(autoincrement())
   uuid              String    @unique @default(uuid()) @db.Uuid
   created_at        DateTime? @default(now()) @db.Timestamptz
@@ -311,14 +382,15 @@ model careplan {
   creator_id        BigInt?
   provider_group_id BigInt?
 
-  creator        provider?       @relation(fields: [creator_id], references: [id])
-  provider_group provider_group? @relation(fields: [provider_group_id], references: [id])
-  copied_from    careplan?       @relation("careplan_copied_from", fields: [copied_from_id], references: [id])
-  copies         careplan[]      @relation("careplan_copied_from")
+  creator        Provider?      @relation(fields: [creator_id], references: [id])
+  provider_group ProviderGroup? @relation(fields: [provider_group_id], references: [id])
+  copied_from    CarePlan?      @relation("careplan_copied_from", fields: [copied_from_id], references: [id])
+  copies         CarePlan[]     @relation("careplan_copied_from")
 
   @@index([title])
   @@index([creator_id])
   @@index([provider_group_id])
   @@index([copied_from_id])
   @@index([created_at])
+  @@map("care_plans")
 }

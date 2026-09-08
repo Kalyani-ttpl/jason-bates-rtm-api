@@ -24,10 +24,10 @@ export class CareplanService extends BaseService {
 
       if (payload.id) {
         const id = BigInt(payload.id);
-        const existing = await prisma.careplan.findUnique({ where: { id } });
+        const existing = await prisma.carePlan.findUnique({ where: { id } });
         this.throwNotFoundError(existing, NOT_FOUND);
 
-        const duplicate = await prisma.careplan.findFirst({
+        const duplicate = await prisma.carePlan.findFirst({
           where: {
             title: { equals: payload.title, mode: "insensitive" },
             NOT: { id },
@@ -36,7 +36,7 @@ export class CareplanService extends BaseService {
         return this.buildResponse(duplicate !== null);
       }
 
-      const duplicate = await prisma.careplan.findFirst({
+      const duplicate = await prisma.carePlan.findFirst({
         where: { title: { equals: payload.title, mode: "insensitive" } },
       });
       return this.buildResponse(duplicate !== null);

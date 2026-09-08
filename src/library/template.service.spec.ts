@@ -30,8 +30,8 @@ describe("TemplateService", () => {
     };
     revision = { create: jest.fn().mockResolvedValue({}) };
     tx = {
-      bulk_communication_template: template,
-      bulk_communication_template_revision: revision,
+      bulkCommunicationTemplate: template,
+      bulkCommunicationTemplateRevision: revision,
     };
     prisma = { ...tx, $transaction: jest.fn((cb: any) => cb(tx)) };
     service = new TemplateService(prisma);

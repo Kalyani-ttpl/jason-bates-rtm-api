@@ -36,9 +36,9 @@ export class ConditionService extends BaseService {
         });
 
         if (icd_codes.length) {
-          await tx.icd_code.updateMany({
+          await tx.icdCode.updateMany({
             where: { id: { in: icd_codes.map((id) => BigInt(id)) } },
-            data: { condition_id: condition.id },
+            data: { conditionId: condition.id },
           });
         }
 
@@ -141,14 +141,14 @@ export class ConditionService extends BaseService {
         await tx.condition.update({ where: { id }, data: conditionData });
 
         if (icd_codes) {
-          await tx.icd_code.updateMany({
-            where: { condition_id: id },
-            data: { condition_id: null },
+          await tx.icdCode.updateMany({
+            where: { conditionId: id },
+            data: { conditionId: null },
           });
           if (icd_codes.length) {
-            await tx.icd_code.updateMany({
+            await tx.icdCode.updateMany({
               where: { id: { in: icd_codes.map((c) => BigInt(c)) } },
-              data: { condition_id: id },
+              data: { conditionId: id },
             });
           }
         }
@@ -171,9 +171,9 @@ export class ConditionService extends BaseService {
       this.throwNotFoundError(existing, `Condition with id '${id}' not found`);
 
       await this.prisma.$transaction(async (tx) => {
-        await tx.icd_code.updateMany({
-          where: { condition_id: id },
-          data: { condition_id: null },
+        await tx.icdCode.updateMany({
+          where: { conditionId: id },
+          data: { conditionId: null },
         });
         await tx.condition.delete({ where: { id } });
       });
@@ -195,8 +195,8 @@ export class ConditionService extends BaseService {
         `Condition with id '${conditionId}' not found`,
       );
 
-      return this.prisma.icd_code.findMany({
-        where: { condition_id: conditionId },
+      return this.prisma.icdCode.findMany({
+        where: { conditionId },
         orderBy: { code: "asc" },
       });
     } catch (error) {
@@ -217,7 +217,7 @@ export class ConditionService extends BaseService {
         `Condition with id '${conditionId}' not found`,
       );
 
-      await this.prisma.condition_question.createMany({
+      await this.prisma.conditionQuestion.createMany({
         data: data.questions.map((question) => ({
           ...question,
           condition_id: conditionId,
@@ -232,7 +232,7 @@ export class ConditionService extends BaseService {
 
   async findQuestions(conditionId: bigint) {
     try {
-      return await this.prisma.condition_question.findMany({
+      return await this.prisma.conditionQuestion.findMany({
         where: { condition_id: conditionId },
         orderBy: { created_at: "asc" },
       });
@@ -247,7 +247,7 @@ export class ConditionService extends BaseService {
     data: UpdateConditionQuestionDto,
   ) {
     try {
-      const question = await this.prisma.condition_question.findFirst({
+      const question = await this.prisma.conditionQuestion.findFirst({
         where: { id: questionId, condition_id: conditionId },
       });
       this.throwNotFoundError(
@@ -255,7 +255,7 @@ export class ConditionService extends BaseService {
         `Question with id '${questionId}' not found for this condition`,
       );
 
-      return await this.prisma.condition_question.update({
+      return await this.prisma.conditionQuestion.update({
         where: { id: questionId },
         data,
       });
@@ -266,7 +266,7 @@ export class ConditionService extends BaseService {
 
   async removeQuestion(conditionId: bigint, questionId: bigint) {
     try {
-      const question = await this.prisma.condition_question.findFirst({
+      const question = await this.prisma.conditionQuestion.findFirst({
         where: { id: questionId, condition_id: conditionId },
       });
       this.throwNotFoundError(
@@ -274,7 +274,7 @@ export class ConditionService extends BaseService {
         `Question with id '${questionId}' not found for this condition`,
       );
 
-      await this.prisma.condition_question.delete({
+      await this.prisma.conditionQuestion.delete({
         where: { id: questionId },
       });
 
@@ -308,12 +308,12 @@ export class ConditionService extends BaseService {
         `Condition with id '${sourceId}' not found`,
       );
 
-      const questions = await this.prisma.condition_question.findMany({
+      const questions = await this.prisma.conditionQuestion.findMany({
         where: { condition_id: sourceId },
       });
 
       if (questions.length) {
-        await this.prisma.condition_question.createMany({
+        await this.prisma.conditionQuestion.createMany({
           data: questions.map((question) => ({
             condition_id: conditionId,
             title: question.title,

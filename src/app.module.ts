@@ -8,6 +8,8 @@ import { AuthModule } from "./auth/auth.module";
 import { CareplanModule } from "./careplan/careplan.module";
 import { LibraryModule } from "./library/library.module";
 import { PrismaModule } from "./prisma/prisma.module";
+import { ProvidergroupModule } from "./providergroup/providergroup.module";
+import { ProvidersModule } from "./providers/providers.module";
 
 @Module({
   imports: [
@@ -19,6 +21,8 @@ import { PrismaModule } from "./prisma/prisma.module";
     AuthModule,
     LibraryModule,
     CareplanModule,
+    ProvidergroupModule,
+    ProvidersModule,
   ],
   controllers: [AppController],
   providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],

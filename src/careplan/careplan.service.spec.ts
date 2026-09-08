@@ -13,7 +13,7 @@ describe("CareplanService", () => {
       findFirst: jest.fn().mockResolvedValue(null),
       findUnique: jest.fn().mockResolvedValue(row),
     };
-    prisma = { careplan };
+    prisma = { carePlan: careplan };
     service = new CareplanService(prisma);
   });
 

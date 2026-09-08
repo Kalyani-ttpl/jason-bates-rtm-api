@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
+import { Prisma } from "@prisma/client";
 import { BaseService } from "../common/base.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { CPT_HCPCS_CODES } from "./data/cpt-hcpcs-codes";
@@ -8,6 +9,18 @@ import {
   QueryCptHcpcsDto,
   UpdateCptCodeDto,
 } from "./dto/cpt-code.dto";
+
+/** The API speaks snake_case; `cpt_codes` follows `schema (2).prisma` camelCase. */
+const SORT_FIELDS: Record<string, string> = {
+  created_at: "createdAt",
+  updated_at: "updatedAt",
+  description: "description",
+  code: "code",
+  category: "category",
+  global_period: "globalPeriod",
+  status: "status",
+  is_favorite: "isFavorite",
+};
 
 @Injectable()
 export class CptCodeService extends BaseService {
@@ -20,7 +33,7 @@ export class CptCodeService extends BaseService {
     try {
       const prisma = this.prisma;
 
-      const existing = await prisma.cpt_code.findFirst({
+      const existing = await prisma.cptCode.findFirst({
         where: { code: data.code },
       });
       if (existing) {
@@ -29,8 +42,8 @@ export class CptCodeService extends BaseService {
         );
       }
 
-      const created = await prisma.cpt_code.create({
-        data,
+      const created = await prisma.cptCode.create({
+        data: this.toPrisma(data),
       });
 
       return this.toResponse(created);
@@ -61,14 +74,14 @@ export class CptCodeService extends BaseService {
         Math.max(Number(param.page_size) || 15, 1),
         100,
       );
-      const sortBy = param.sort_by ?? "created_at";
+      const sortBy = SORT_FIELDS[param.sort_by ?? "created_at"];
       const orderBy = param.order_by ?? "desc";
 
       const where = {
         ...(param.category && { category: param.category }),
         ...(param.status && { status: param.status }),
         ...(param.is_favorite && {
-          is_favorite: param.is_favorite === "true",
+          isFavorite: param.is_favorite === "true",
         }),
         ...(param.search && {
           OR: [
@@ -90,13 +103,13 @@ export class CptCodeService extends BaseService {
       };
 
       const [rows, count] = await Promise.all([
-        prisma.cpt_code.findMany({
+        prisma.cptCode.findMany({
           where,
           take: pageSize,
           skip: (pageNo - 1) * pageSize,
           orderBy: { [sortBy]: orderBy },
         }),
-        prisma.cpt_code.count({ where }),
+        prisma.cptCode.count({ where }),
       ]);
 
       const totalPages = Math.ceil(count / pageSize);
@@ -113,7 +126,7 @@ export class CptCodeService extends BaseService {
 
   async findOne(id: bigint) {
     try {
-      const found = await this.prisma.cpt_code.findUnique({
+      const found = await this.prisma.cptCode.findUnique({
         where: { id },
       });
       this.throwNotFoundError(found, `CPT code with id '${id}' not found`);
@@ -129,11 +142,11 @@ export class CptCodeService extends BaseService {
     try {
       const prisma = this.prisma;
 
-      const existing = await prisma.cpt_code.findUnique({ where: { id } });
+      const existing = await prisma.cptCode.findUnique({ where: { id } });
       this.throwNotFoundError(existing, `CPT code with id '${id}' not found`);
 
       if (data.code) {
-        const duplicate = await prisma.cpt_code.findFirst({
+        const duplicate = await prisma.cptCode.findFirst({
           where: { code: data.code, NOT: { id } },
         });
         if (duplicate) {
@@ -143,7 +156,10 @@ export class CptCodeService extends BaseService {
         }
       }
 
-      const updated = await prisma.cpt_code.update({ where: { id }, data });
+      const updated = await prisma.cptCode.update({
+        where: { id },
+        data: this.toPrisma(data),
+      });
       return this.toResponse(updated);
     } catch (error) {
       this.handleError(error, "Failed to update CPT code");
@@ -152,41 +168,54 @@ export class CptCodeService extends BaseService {
 
   async remove(id: bigint) {
     try {
-      const existing = await this.prisma.cpt_code.findUnique({
+      const existing = await this.prisma.cptCode.findUnique({
         where: { id },
       });
       this.throwNotFoundError(existing, `CPT code with id '${id}' not found`);
 
-      await this.prisma.cpt_code.delete({ where: { id } });
+      await this.prisma.cptCode.delete({ where: { id } });
       return { detail: "CPT code deleted successfully", id };
     } catch (error) {
       this.handleError(error, "Failed to delete CPT code");
     }
   }
 
+  private toPrisma(data: UpdateCptCodeDto): Prisma.CptCodeCreateInput {
+    return {
+      ...(data.code !== undefined && { code: data.code }),
+      ...(data.description !== undefined && { description: data.description }),
+      ...(data.category !== undefined && { category: data.category }),
+      ...(data.global_period !== undefined && {
+        globalPeriod: data.global_period,
+      }),
+      ...(data.status !== undefined && { status: data.status }),
+      ...(data.is_favorite !== undefined && { isFavorite: data.is_favorite }),
+    };
+  }
+
   private toResponse(item: {
     id: bigint;
     uuid: string;
-    created_at: Date | null;
-    updated_at: Date | null;
+    createdAt: Date | null;
+    updatedAt: Date | null;
     description: string | null;
     code: string | null;
     category: string | null;
-    global_period: number | null;
+    globalPeriod: number | null;
     status: string;
-    is_favorite: boolean;
+    isFavorite: boolean;
   }) {
     return {
       id: item.id,
       uuid: item.uuid,
-      created_at: item.created_at,
-      updated_at: item.updated_at,
+      created_at: item.createdAt,
+      updated_at: item.updatedAt,
       description: item.description,
       code: item.code,
       category: item.category,
-      global_period: item.global_period,
+      global_period: item.globalPeriod,
       status: item.status,
-      is_favorite: item.is_favorite,
+      is_favorite: item.isFavorite,
       value: item.id,
       label: item.description
         ? `${item.code} - ${item.description}`

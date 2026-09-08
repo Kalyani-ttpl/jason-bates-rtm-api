@@ -16,6 +16,7 @@ import {
 } from "@prisma/client/runtime/client";
 import { randomUUID } from "node:crypto";
 import * as jwt from "jsonwebtoken";
+import { JwtPayload } from "./constants";
 
 /**
  * Shared error mapping, validation and logging helpers for feature services.
@@ -157,19 +158,24 @@ export class BaseService {
   }
 
   /** Decodes the bearer token from request headers without verifying it. */
-  protected decodeTokenFromHeaders(headers: Record<string, any>) {
+  protected decodeTokenFromHeaders(
+    headers: Record<string, unknown>,
+  ): JwtPayload | null {
     const token = this.getTokenFromHeaders(headers);
     try {
-      return jwt.decode(token) as any;
+      return jwt.decode(token) as JwtPayload | null;
     } catch (error) {
-      this.logger.error("Failed to decode token", error?.stack || error);
+      this.logError("Failed to decode token", error);
       throw new UnauthorizedException("Failed to decode token");
     }
   }
 
-  protected getTokenFromHeaders(headers: Record<string, any>): string {
-    const authorization = headers["authorization"] || headers["Authorization"];
-    if (!authorization || !authorization.startsWith("Bearer ")) {
+  protected getTokenFromHeaders(headers: Record<string, unknown>): string {
+    const authorization = headers["authorization"] ?? headers["Authorization"];
+    if (
+      typeof authorization !== "string" ||
+      !authorization.startsWith("Bearer ")
+    ) {
       throw new UnauthorizedException(
         "Authorization token is missing or invalid",
       );
@@ -188,8 +194,8 @@ export class BaseService {
     this.logger.log(message, context);
   }
 
-  protected logError(message: string, error?: any): void {
-    this.logger.error(message, error?.stack);
+  protected logError(message: string, error?: unknown): void {
+    this.logger.error(message, error instanceof Error ? error.stack : error);
   }
 
   protected logDebug(message: string, context?: any): void {

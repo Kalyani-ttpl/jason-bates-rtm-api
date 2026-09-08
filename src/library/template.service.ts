@@ -19,7 +19,7 @@ export class TemplateService extends BaseService {
     try {
       const { provider_group_id, ...templateData } = data;
 
-      return await this.prisma.bulk_communication_template.create({
+      return await this.prisma.bulkCommunicationTemplate.create({
         data: {
           ...templateData,
           provider_group_id: provider_group_id
@@ -68,13 +68,13 @@ export class TemplateService extends BaseService {
       };
 
       const [rows, count] = await Promise.all([
-        prisma.bulk_communication_template.findMany({
+        prisma.bulkCommunicationTemplate.findMany({
           where,
           take: pageSize,
           skip: (pageNo - 1) * pageSize,
           orderBy: { [sortBy]: orderBy },
         }),
-        prisma.bulk_communication_template.count({ where }),
+        prisma.bulkCommunicationTemplate.count({ where }),
       ]);
 
       const totalPages = Math.ceil(count / pageSize);
@@ -101,15 +101,13 @@ export class TemplateService extends BaseService {
     try {
       const { provider_group_id, ...templateData } = data;
 
-      const existing = await this.prisma.bulk_communication_template.findUnique(
-        {
-          where: { id },
-        },
-      );
+      const existing = await this.prisma.bulkCommunicationTemplate.findUnique({
+        where: { id },
+      });
       this.throwNotFoundError(existing, `Template with id '${id}' not found`);
 
       return await this.prisma.$transaction(async (tx) => {
-        const updated = await tx.bulk_communication_template.update({
+        const updated = await tx.bulkCommunicationTemplate.update({
           where: { id },
           data: {
             ...templateData,
@@ -123,7 +121,7 @@ export class TemplateService extends BaseService {
           },
         });
 
-        await tx.bulk_communication_template_revision.create({
+        await tx.bulkCommunicationTemplateRevision.create({
           data: {
             template_id: id,
             old_title: existing!.title,
@@ -143,14 +141,12 @@ export class TemplateService extends BaseService {
 
   async remove(id: bigint) {
     try {
-      const existing = await this.prisma.bulk_communication_template.findUnique(
-        {
-          where: { id },
-        },
-      );
+      const existing = await this.prisma.bulkCommunicationTemplate.findUnique({
+        where: { id },
+      });
       this.throwNotFoundError(existing, `Template with id '${id}' not found`);
 
-      await this.prisma.bulk_communication_template.delete({
+      await this.prisma.bulkCommunicationTemplate.delete({
         where: { id },
       });
 

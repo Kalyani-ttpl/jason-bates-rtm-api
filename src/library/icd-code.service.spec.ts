@@ -5,14 +5,14 @@ describe("IcdCodeService", () => {
   const row = {
     id: 1n,
     uuid: "icd-uuid",
-    created_at: new Date("2026-01-01"),
-    updated_at: new Date("2026-01-02"),
+    createdAt: new Date("2026-01-01"),
+    updatedAt: new Date("2026-01-02"),
     description: "Typhoid fever",
     code: "A01.0",
     status: "active",
-    is_unspecified: false,
-    is_hipaa_covered: null,
-    order_number: null,
+    isUnspecified: false,
+    isHipaaCovered: null,
+    orderNumber: null,
   };
 
   let icdCode: any;
@@ -29,7 +29,7 @@ describe("IcdCodeService", () => {
       update: jest.fn().mockResolvedValue(row),
       delete: jest.fn().mockResolvedValue(row),
     };
-    prisma = { icd_code: icdCode };
+    prisma = { icdCode };
     service = new IcdCodeService(prisma);
   });
 
@@ -63,7 +63,7 @@ describe("IcdCodeService", () => {
 
       expect(result).toMatchObject({ status: "active", is_unspecified: false });
       expect(icdCode.create).toHaveBeenCalledWith({
-        data: { code: "M54.50", is_unspecified: true },
+        data: { code: "M54.50", isUnspecified: true },
       });
     });
 
@@ -93,7 +93,7 @@ describe("IcdCodeService", () => {
         where: {},
         take: 15,
         skip: 0,
-        orderBy: { created_at: "desc" },
+        orderBy: { createdAt: "desc" },
       });
     });
 
@@ -141,7 +141,7 @@ describe("IcdCodeService", () => {
       await service.findAll({ is_unspecified: "true" });
 
       expect(icdCode.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { is_unspecified: true } }),
+        expect.objectContaining({ where: { isUnspecified: true } }),
       );
     });
 
@@ -154,7 +154,7 @@ describe("IcdCodeService", () => {
 
       const where = icdCode.findMany.mock.calls[0][0].where;
       expect(where.status).toBe("active");
-      expect(where.is_unspecified).toBe(false);
+      expect(where.isUnspecified).toBe(false);
       expect(where.OR).toHaveLength(2);
     });
 

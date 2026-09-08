@@ -25,22 +25,22 @@ export class AuthService extends BaseService {
   async login(loginDto: LoginDto) {
     const prisma = this.prisma;
 
-    const user = await prisma.user_account.findFirst({
-      where: { email: loginDto.email, is_deleted: false },
+    const user = await prisma.user.findFirst({
+      where: { email: loginDto.email, isDeleted: false },
     });
-    if (!user?.password) {
+    if (!user?.passwordHash) {
       throw new UnauthorizedException("Invalid credentials");
     }
 
     const isPasswordValid = await bcrypt.compare(
       loginDto.password,
-      user.password,
+      user.passwordHash,
     );
     if (!isPasswordValid) {
       throw new UnauthorizedException("Invalid credentials");
     }
 
-    if (!user.is_active) {
+    if (!user.isActive) {
       throw new UnauthorizedException(
         "Your account has been disabled. Please contact your administrator",
       );
@@ -51,15 +51,15 @@ export class AuthService extends BaseService {
     });
 
     const memberships = provider
-      ? await prisma.provider_group_member.findMany({
+      ? await prisma.providerGroupMember.findMany({
           where: { provider_id: provider.id },
           include: { provider_group: true },
         })
       : [];
 
-    await prisma.user_account.update({
+    await prisma.user.update({
       where: { id: user.id },
-      data: { last_login: new Date() },
+      data: { lastLoginAt: new Date() },
     });
 
     const payload: JwtPayload = {
@@ -69,8 +69,8 @@ export class AuthService extends BaseService {
       jti: this.generateUUID(),
       admin: {
         userId: Number(user.id),
-        isTenantAdmin: user.is_tenant_admin ?? false,
-        isSuperAdmin: user.is_super_tenant_admin ?? false,
+        isTenantAdmin: user.isTenantAdmin ?? false,
+        isSuperAdmin: user.isSuperTenantAdmin ?? false,
       },
       provider_id: provider ? Number(provider.id) : null,
       language: provider?.language ?? "en",
@@ -83,12 +83,12 @@ export class AuthService extends BaseService {
         id: user.id,
         uuid: user.uuid,
         email: user.email,
-        first_name: user.first_name,
-        last_name: user.last_name,
+        first_name: user.firstName,
+        last_name: user.lastName,
         picture: user.picture,
-        is_provider: user.is_provider,
-        is_tenant_admin: user.is_tenant_admin,
-        is_super_tenant_admin: user.is_super_tenant_admin,
+        is_provider: user.isProvider,
+        is_tenant_admin: user.isTenantAdmin,
+        is_super_tenant_admin: user.isSuperTenantAdmin,
       },
       provider,
       provider_groups: memberships.map((m) => m.provider_group),
@@ -125,7 +125,7 @@ export class AuthService extends BaseService {
   async me(user: AuthenticatedUser) {
     const prisma = this.prisma;
 
-    const account = await prisma.user_account.findUnique({
+    const account = await prisma.user.findUnique({
       where: { id: user.id },
     });
     this.throwNotFoundError(account, "User not found");
@@ -135,7 +135,7 @@ export class AuthService extends BaseService {
       : null;
 
     const memberships = provider
-      ? await prisma.provider_group_member.findMany({
+      ? await prisma.providerGroupMember.findMany({
           where: { provider_id: provider.id },
           include: { provider_group: true },
         })
@@ -146,11 +146,11 @@ export class AuthService extends BaseService {
         id: account!.id,
         uuid: account!.uuid,
         email: account!.email,
-        first_name: account!.first_name,
-        last_name: account!.last_name,
+        first_name: account!.firstName,
+        last_name: account!.lastName,
         picture: account!.picture,
-        is_tenant_admin: account!.is_tenant_admin,
-        is_super_tenant_admin: account!.is_super_tenant_admin,
+        is_tenant_admin: account!.isTenantAdmin,
+        is_super_tenant_admin: account!.isSuperTenantAdmin,
       },
       provider,
       provider_groups: memberships.map((m) => m.provider_group),

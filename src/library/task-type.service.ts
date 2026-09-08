@@ -19,7 +19,7 @@ export class TaskTypeService extends BaseService {
     try {
       const { provider_group_id, ...taskTypeData } = data;
 
-      const existing = await this.prisma.task_type.findFirst({
+      const existing = await this.prisma.taskType.findFirst({
         where: {
           title: data.title,
           provider_group_id: provider_group_id
@@ -33,7 +33,7 @@ export class TaskTypeService extends BaseService {
         );
       }
 
-      return await this.prisma.task_type.create({
+      return await this.prisma.taskType.create({
         data: {
           ...taskTypeData,
           provider_group_id: provider_group_id
@@ -70,13 +70,13 @@ export class TaskTypeService extends BaseService {
       };
 
       const [rows, count] = await Promise.all([
-        prisma.task_type.findMany({
+        prisma.taskType.findMany({
           where,
           take: pageSize,
           skip: (pageNo - 1) * pageSize,
           orderBy: { [sortBy]: orderBy },
         }),
-        prisma.task_type.count({ where }),
+        prisma.taskType.count({ where }),
       ]);
 
       const totalPages = Math.ceil(count / pageSize);
@@ -95,7 +95,7 @@ export class TaskTypeService extends BaseService {
     try {
       const { provider_group_id, ...taskTypeData } = data;
 
-      const existing = await this.prisma.task_type.findUnique({
+      const existing = await this.prisma.taskType.findUnique({
         where: { id },
       });
       this.throwNotFoundError(
@@ -103,7 +103,7 @@ export class TaskTypeService extends BaseService {
         `Activity type with id '${id}' not found`,
       );
 
-      return await this.prisma.task_type.update({
+      return await this.prisma.taskType.update({
         where: { id },
         data: {
           ...taskTypeData,
@@ -121,7 +121,7 @@ export class TaskTypeService extends BaseService {
 
   async remove(id: bigint) {
     try {
-      const existing = await this.prisma.task_type.findUnique({
+      const existing = await this.prisma.taskType.findUnique({
         where: { id },
       });
       this.throwNotFoundError(
@@ -129,7 +129,7 @@ export class TaskTypeService extends BaseService {
         `Activity type with id '${id}' not found`,
       );
 
-      await this.prisma.task_type.delete({ where: { id } });
+      await this.prisma.taskType.delete({ where: { id } });
 
       return { detail: "Activity type deleted successfully", id };
     } catch (error) {

@@ -46,8 +46,8 @@ describe("ConditionService", () => {
     };
     tx = {
       condition,
-      condition_question: conditionQuestion,
-      icd_code: icdCode,
+      conditionQuestion,
+      icdCode,
     };
     prisma = { ...tx, $transaction: jest.fn((cb: any) => cb(tx)) };
     service = new ConditionService(prisma);
@@ -62,7 +62,7 @@ describe("ConditionService", () => {
       });
       expect(icdCode.updateMany).toHaveBeenCalledWith({
         where: { id: { in: [7n, 8n] } },
-        data: { condition_id: 1n },
+        data: { conditionId: 1n },
       });
     });
 
@@ -104,12 +104,12 @@ describe("ConditionService", () => {
       await service.update(1n, { icd_codes: ["9"] });
 
       expect(icdCode.updateMany).toHaveBeenNthCalledWith(1, {
-        where: { condition_id: 1n },
-        data: { condition_id: null },
+        where: { conditionId: 1n },
+        data: { conditionId: null },
       });
       expect(icdCode.updateMany).toHaveBeenNthCalledWith(2, {
         where: { id: { in: [9n] } },
-        data: { condition_id: 1n },
+        data: { conditionId: 1n },
       });
     });
 
@@ -127,8 +127,8 @@ describe("ConditionService", () => {
       await service.remove(1n);
 
       expect(icdCode.updateMany).toHaveBeenCalledWith({
-        where: { condition_id: 1n },
-        data: { condition_id: null },
+        where: { conditionId: 1n },
+        data: { conditionId: null },
       });
       expect(condition.delete).toHaveBeenCalledWith({ where: { id: 1n } });
     });

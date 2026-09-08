@@ -15,14 +15,14 @@ describe("AuthService", () => {
     id: 10n,
     uuid: "user-uuid",
     email: "provider@acme.com",
-    password: await bcrypt.hash("Provider@123", 4),
-    first_name: "Jason",
-    last_name: "Bates",
+    passwordHash: await bcrypt.hash("Provider@123", 4),
+    firstName: "Jason",
+    lastName: "Bates",
     picture: null,
-    is_active: true,
-    is_provider: true,
-    is_tenant_admin: true,
-    is_super_tenant_admin: false,
+    isActive: true,
+    isProvider: true,
+    isTenantAdmin: true,
+    isSuperTenantAdmin: false,
   });
 
   const login = () => ({
@@ -34,13 +34,13 @@ describe("AuthService", () => {
     process.env.JWTSECRET = secret;
 
     prisma = {
-      user_account: {
+      user: {
         findFirst: jest.fn(),
         findUnique: jest.fn(),
         update: jest.fn().mockResolvedValue({}),
       },
       provider: { findFirst: jest.fn(), findUnique: jest.fn() },
-      provider_group_member: { findMany: jest.fn().mockResolvedValue([]) },
+      providerGroupMember: { findMany: jest.fn().mockResolvedValue([]) },
     };
     jwtService = new JwtService({ secret });
 
@@ -49,9 +49,9 @@ describe("AuthService", () => {
 
   describe("login", () => {
     it("returns tokens, provider and groups for valid credentials", async () => {
-      prisma.user_account.findFirst.mockResolvedValue(await activeUser());
+      prisma.user.findFirst.mockResolvedValue(await activeUser());
       prisma.provider.findFirst.mockResolvedValue({ id: 20n, language: "en" });
-      prisma.provider_group_member.findMany.mockResolvedValue([
+      prisma.providerGroupMember.findMany.mockResolvedValue([
         { provider_group: { id: 30n, group_name: "Acme Group" } },
       ]);
 
@@ -66,7 +66,7 @@ describe("AuthService", () => {
     });
 
     it("binds the access token to the provider", async () => {
-      prisma.user_account.findFirst.mockResolvedValue(await activeUser());
+      prisma.user.findFirst.mockResolvedValue(await activeUser());
       prisma.provider.findFirst.mockResolvedValue({ id: 20n, language: "es" });
 
       const { access } = await service.login(login());
@@ -79,7 +79,7 @@ describe("AuthService", () => {
     });
 
     it("rejects an unknown email", async () => {
-      prisma.user_account.findFirst.mockResolvedValue(null);
+      prisma.user.findFirst.mockResolvedValue(null);
 
       await expect(service.login(login())).rejects.toThrow(
         UnauthorizedException,
@@ -87,7 +87,7 @@ describe("AuthService", () => {
     });
 
     it("rejects a wrong password", async () => {
-      prisma.user_account.findFirst.mockResolvedValue(await activeUser());
+      prisma.user.findFirst.mockResolvedValue(await activeUser());
 
       await expect(
         service.login({ ...login(), password: "wrong" }),
@@ -95,9 +95,9 @@ describe("AuthService", () => {
     });
 
     it("rejects a disabled account", async () => {
-      prisma.user_account.findFirst.mockResolvedValue({
+      prisma.user.findFirst.mockResolvedValue({
         ...(await activeUser()),
-        is_active: false,
+        isActive: false,
       });
 
       await expect(service.login(login())).rejects.toThrow(
@@ -106,43 +106,43 @@ describe("AuthService", () => {
     });
 
     it("logs in a user that has no provider record", async () => {
-      prisma.user_account.findFirst.mockResolvedValue(await activeUser());
+      prisma.user.findFirst.mockResolvedValue(await activeUser());
       prisma.provider.findFirst.mockResolvedValue(null);
 
       const result = await service.login(login());
 
       expect(result.provider).toBeNull();
       expect(result.provider_groups).toEqual([]);
-      expect(prisma.provider_group_member.findMany).not.toHaveBeenCalled();
+      expect(prisma.providerGroupMember.findMany).not.toHaveBeenCalled();
     });
 
     it("records the login timestamp", async () => {
-      prisma.user_account.findFirst.mockResolvedValue(await activeUser());
+      prisma.user.findFirst.mockResolvedValue(await activeUser());
       prisma.provider.findFirst.mockResolvedValue(null);
 
       await service.login(login());
 
-      expect(prisma.user_account.update).toHaveBeenCalledWith({
+      expect(prisma.user.update).toHaveBeenCalledWith({
         where: { id: 10n },
-        data: { last_login: expect.any(Date) },
+        data: { lastLoginAt: expect.any(Date) },
       });
     });
 
     it("looks up the user by email, skipping deleted accounts", async () => {
-      prisma.user_account.findFirst.mockResolvedValue(await activeUser());
+      prisma.user.findFirst.mockResolvedValue(await activeUser());
       prisma.provider.findFirst.mockResolvedValue(null);
 
       await service.login(login());
 
-      expect(prisma.user_account.findFirst).toHaveBeenCalledWith({
-        where: { email: "provider@acme.com", is_deleted: false },
+      expect(prisma.user.findFirst).toHaveBeenCalledWith({
+        where: { email: "provider@acme.com", isDeleted: false },
       });
     });
   });
 
   describe("refreshToken", () => {
     it("issues a new access token from a refresh token", async () => {
-      prisma.user_account.findFirst.mockResolvedValue(await activeUser());
+      prisma.user.findFirst.mockResolvedValue(await activeUser());
       prisma.provider.findFirst.mockResolvedValue({ id: 20n, language: "en" });
       const { refresh } = await service.login(login());
 
@@ -154,7 +154,7 @@ describe("AuthService", () => {
     });
 
     it("rejects an access token", async () => {
-      prisma.user_account.findFirst.mockResolvedValue(await activeUser());
+      prisma.user.findFirst.mockResolvedValue(await activeUser());
       prisma.provider.findFirst.mockResolvedValue(null);
       const { access } = await service.login(login());
 

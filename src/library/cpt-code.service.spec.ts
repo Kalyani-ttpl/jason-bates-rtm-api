@@ -5,14 +5,14 @@ describe("CptCodeService", () => {
   const row = {
     id: 1n,
     uuid: "cpt-uuid",
-    created_at: new Date("2026-01-01"),
-    updated_at: new Date("2026-01-02"),
+    createdAt: new Date("2026-01-01"),
+    updatedAt: new Date("2026-01-02"),
     description: "Office or other outpatient visit",
     code: "99213",
     category: "Evaluation and Management",
-    global_period: null,
+    globalPeriod: null,
     status: "active",
-    is_favorite: false,
+    isFavorite: false,
   };
 
   let cptCode: any;
@@ -29,7 +29,7 @@ describe("CptCodeService", () => {
       update: jest.fn().mockResolvedValue(row),
       delete: jest.fn().mockResolvedValue(row),
     };
-    prisma = { cpt_code: cptCode };
+    prisma = { cptCode };
     service = new CptCodeService(prisma);
   });
 
@@ -56,8 +56,8 @@ describe("CptCodeService", () => {
           code: "29881",
           description: "Knee arthroscopy w/ meniscectomy",
           category: "Surgical",
-          global_period: 90,
-          is_favorite: true,
+          globalPeriod: 90,
+          isFavorite: true,
         },
       });
     });
@@ -93,7 +93,7 @@ describe("CptCodeService", () => {
         where: {},
         take: 15,
         skip: 0,
-        orderBy: { created_at: "desc" },
+        orderBy: { createdAt: "desc" },
       });
     });
 
@@ -119,7 +119,7 @@ describe("CptCodeService", () => {
 
       expect(cptCode.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { category: "Surgical", status: "active", is_favorite: true },
+          where: { category: "Surgical", status: "active", isFavorite: true },
         }),
       );
     });
@@ -128,7 +128,7 @@ describe("CptCodeService", () => {
       await service.findAll({ sort_by: "is_favorite", order_by: "desc" });
 
       expect(cptCode.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ orderBy: { is_favorite: "desc" } }),
+        expect.objectContaining({ orderBy: { isFavorite: "desc" } }),
       );
     });
 
