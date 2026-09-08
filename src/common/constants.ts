@@ -10,8 +10,6 @@ export interface JwtPayload {
   };
   provider_id: number | null;
   language: string;
-  tenant_id: number;
-  tenant_slug: string;
   iat?: number;
   exp?: number;
 }
@@ -21,14 +19,10 @@ export interface AuthenticatedUser {
   uuid: string;
   email: string | null;
   providerId: bigint | null;
-  tenantId: bigint;
-  tenantSlug: string;
   isTenantAdmin: boolean;
   isSuperTenantAdmin: boolean;
   language: string;
 }
-
-export const TENANT_HEADER = "tenant-header";
 
 export const PROVIDER_ROLES = {
   PHYSICIAN: "physician",

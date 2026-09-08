@@ -19,7 +19,7 @@ export class AuthController {
 
   @Post("login")
   @Throttle({ auth: { limit: 5, ttl: 900000 } })
-  @ApiOperation({ summary: "Authenticate a provider within a tenant" })
+  @ApiOperation({ summary: "Authenticate a provider" })
   @ApiResponse({ status: 201, description: "Logged in." })
   @ApiResponse({ status: 401, description: "Invalid credentials." })
   login(@Body() loginDto: LoginDto) {

@@ -6,59 +6,14 @@ datasource db {
   provider = "postgresql"
 }
 
-model tenant {
-  id                             BigInt    @id @default(autoincrement())
-  uuid                           String    @unique @default(uuid()) @db.Uuid
-  created_at                     DateTime? @default(now()) @db.Timestamptz
-  updated_at                     DateTime? @updatedAt @db.Timestamptz
-  slug                           String    @unique @db.VarChar(100)
-  name                           String    @unique @db.VarChar(100)
-  code                           String?   @unique @db.VarChar(3)
-  description                    String?   @db.Text
-  timezone                       String?   @db.VarChar(255)
-  frontend_url                   String?   @db.VarChar(255)
-  features                       Json?     @db.Json
-  feature_programs               Json?     @db.Json
-  additional_features            Json?     @db.Json
-  billing_mode                   String?   @db.VarChar(255)
-  white_label                    Boolean?  @default(false)
-  is_active                      Boolean   @default(true)
-  is_billing_enabled             Boolean?  @default(false)
-  is_sandbox_mode_on             Boolean?  @default(false)
-  is_trial_enabled               Boolean?  @default(false)
-  trial_period_start_at          DateTime? @db.Timestamptz
-  trial_period_end_at            DateTime? @db.Timestamptz
-  is_data_archieved              Boolean?  @default(false)
-  is_marked_for_deletion         Boolean?  @default(false)
-  marked_for_deletion_at         DateTime? @db.Timestamptz
-  disable_patient_emails         Boolean?  @default(false)
-  disable_patient_notifications  Boolean?  @default(false)
-  disable_patient_sms            Boolean?  @default(false)
-  disable_provider_emails        Boolean?  @default(false)
-  disable_provider_notifications Boolean?  @default(false)
-  disable_provider_sms           Boolean?  @default(false)
-  communication_logo             String?   @db.Text
-  consent_logo                   String?   @db.Text
-  report_logo                    String?   @db.Text
-
-  user_account          user_account[]
-  provider              provider[]
-  provider_group        provider_group[]
-  provider_group_member provider_group_member[]
-
-  @@index([slug])
-  @@index([code])
-}
-
 model user_account {
   id                    BigInt    @id @default(autoincrement())
   uuid                  String    @unique @default(uuid()) @db.Uuid
-  tenant_id             BigInt
   created_at            DateTime? @default(now()) @db.Timestamptz
   updated_at            DateTime? @updatedAt @db.Timestamptz
   password              String?   @db.VarChar(128)
-  username              String?   @db.VarChar(150)
-  email                 String?   @db.VarChar(254)
+  username              String?   @unique @db.VarChar(150)
+  email                 String?   @unique @db.VarChar(254)
   first_name            String?   @db.VarChar(255)
   last_name             String?   @db.VarChar(255)
   picture               String?   @db.Text
@@ -73,28 +28,21 @@ model user_account {
   is_patient            Boolean?  @default(false)
   is_deleted            Boolean?  @default(false)
 
-  tenant     tenant     @relation(fields: [tenant_id], references: [id])
   added_by   provider[] @relation("provider_added_by")
   deleted_by provider[] @relation("provider_deleted_by")
   provider   provider?  @relation("provider_user")
-
-  @@unique([tenant_id, email])
-  @@unique([tenant_id, username])
-  @@index([tenant_id])
-  @@index([email])
 }
 
 model provider_group {
   id                             BigInt    @id @default(autoincrement())
   uuid                           String    @unique @default(uuid()) @db.Uuid
-  tenant_id                      BigInt
   created_at                     DateTime? @default(now()) @db.Timestamptz
   updated_at                     DateTime? @updatedAt @db.Timestamptz
   group_name                     String?   @db.VarChar(255)
-  group_npi                      String?   @db.VarChar(10)
-  code                           String?   @db.VarChar(3)
+  group_npi                      String?   @unique @db.VarChar(10)
+  code                           String?   @unique @db.VarChar(3)
   email                          String?   @db.VarChar(254)
-  system_email                   String?   @db.VarChar(254)
+  system_email                   String?   @unique @db.VarChar(254)
   system_email_verified          Boolean?  @default(false)
   phone                          String?   @db.VarChar(15)
   fax_id                         String?   @db.VarChar(20)
@@ -114,20 +62,17 @@ model provider_group {
   disable_provider_notifications Boolean?  @default(false)
   disable_provider_sms           Boolean?  @default(false)
 
-  tenant  tenant                  @relation(fields: [tenant_id], references: [id])
-  members provider_group_member[]
+  members                     provider_group_member[]
+  task_type                   task_type[]
+  bulk_communication_template bulk_communication_template[]
+  careplan                    careplan[]
 
-  @@unique([tenant_id, group_npi])
-  @@unique([tenant_id, code])
-  @@unique([tenant_id, system_email])
-  @@index([tenant_id])
   @@index([created_at])
 }
 
 model provider {
   id                   BigInt    @id @default(autoincrement())
   uuid                 String    @unique @default(uuid()) @db.Uuid
-  tenant_id            BigInt
   created_at           DateTime? @default(now()) @db.Timestamptz
   updated_at           DateTime? @updatedAt @db.Timestamptz
   first_name           String?   @db.VarChar(255)
@@ -136,10 +81,10 @@ model provider {
   display_name         String?   @db.VarChar(255)
   gender               String?   @db.VarChar(100)
   pronoun              String?   @db.VarChar(50)
-  email                String?   @db.VarChar(254)
+  email                String?   @unique @db.VarChar(254)
   temparory_email      String?   @db.VarChar(254)
   phone                String?   @db.VarChar(15)
-  npi                  String?   @db.VarChar(10)
+  npi                  String?   @unique @db.VarChar(10)
   role                 String?   @db.VarChar(30)
   secondary_role       String?   @db.VarChar(30)
   permission           String?   @db.VarChar(100)
@@ -168,17 +113,16 @@ model provider {
   added_by_id          BigInt?
   deleted_by_id        BigInt?
 
-  tenant     tenant                  @relation(fields: [tenant_id], references: [id])
   user       user_account?           @relation("provider_user", fields: [user_id], references: [id])
   added_by   user_account?           @relation("provider_added_by", fields: [added_by_id], references: [id])
   deleted_by user_account?           @relation("provider_deleted_by", fields: [deleted_by_id], references: [id])
   groups     provider_group_member[]
 
-  @@unique([tenant_id, email])
-  @@unique([tenant_id, npi])
-  @@index([tenant_id])
-  @@index([email])
-  @@index([npi])
+  task_type          task_type[]
+  consent_created_by consent[]   @relation("consent_created_by")
+  consent_deleted_by consent[]   @relation("consent_deleted_by")
+  careplan           careplan[]
+
   @@index([added_by_id])
   @@index([deleted_by_id])
   @@index([created_at])
@@ -186,17 +130,195 @@ model provider {
 
 model provider_group_member {
   id                BigInt    @id @default(autoincrement())
-  tenant_id         BigInt
   created_at        DateTime? @default(now()) @db.Timestamptz
   provider_id       BigInt
   provider_group_id BigInt
 
-  tenant         tenant         @relation(fields: [tenant_id], references: [id])
   provider       provider       @relation(fields: [provider_id], references: [id])
   provider_group provider_group @relation(fields: [provider_group_id], references: [id])
 
   @@unique([provider_id, provider_group_id])
-  @@index([tenant_id])
   @@index([provider_id])
   @@index([provider_group_id])
+}
+
+model icd_code {
+  id               BigInt    @id @default(autoincrement())
+  uuid             String    @unique @default(uuid()) @db.Uuid
+  created_at       DateTime? @default(now()) @db.Timestamptz
+  updated_at       DateTime? @updatedAt @db.Timestamptz
+  code             String?   @unique @db.VarChar(200)
+  description      String?   @db.VarChar(500)
+  status           String    @default("active") @db.VarChar(20)
+  is_unspecified   Boolean   @default(false)
+  is_hipaa_covered String?   @db.VarChar(100)
+  order_number     String?   @db.VarChar(255)
+  condition_id     BigInt?
+
+  condition condition? @relation(fields: [condition_id], references: [id])
+
+  @@index([description])
+  @@index([status])
+  @@index([condition_id])
+  @@index([created_at])
+}
+
+model cpt_code {
+  id            BigInt    @id @default(autoincrement())
+  uuid          String    @unique @default(uuid()) @db.Uuid
+  created_at    DateTime? @default(now()) @db.Timestamptz
+  updated_at    DateTime? @updatedAt @db.Timestamptz
+  code          String?   @unique @db.VarChar(255)
+  description   String?   @db.VarChar(500)
+  category      String?   @db.VarChar(100)
+  global_period Int?
+  status        String    @default("active") @db.VarChar(20)
+  is_favorite   Boolean   @default(false)
+
+  @@index([description])
+  @@index([category])
+  @@index([status])
+  @@index([created_at])
+}
+
+model condition {
+  id          BigInt    @id @default(autoincrement())
+  uuid        String    @unique @default(uuid()) @db.Uuid
+  created_at  DateTime? @default(now()) @db.Timestamptz
+  updated_at  DateTime? @updatedAt @db.Timestamptz
+  title       String?   @unique @db.VarChar(200)
+  description String?   @db.VarChar(255)
+  for_ccm     Boolean?  @default(false)
+  for_pcm     Boolean?  @default(false)
+  for_bhi     Boolean?  @default(false)
+  for_rpm     Boolean?  @default(false)
+  programs    Json?     @db.Json
+
+  questions condition_question[]
+  icd_codes icd_code[]
+
+  @@index([created_at])
+}
+
+model condition_question {
+  id              BigInt    @id @default(autoincrement())
+  uuid            String    @unique @default(uuid()) @db.Uuid
+  condition_id    BigInt
+  created_at      DateTime? @default(now()) @db.Timestamptz
+  updated_at      DateTime? @updatedAt @db.Timestamptz
+  title           String?   @db.Text
+  question_type   String?   @db.VarChar(50)
+  choices         String?   @db.Text
+  additional_note String?   @db.Text
+
+  condition condition @relation(fields: [condition_id], references: [id], onDelete: Cascade)
+
+  @@index([condition_id])
+  @@index([created_at])
+}
+
+model task_type {
+  id                BigInt    @id @default(autoincrement())
+  uuid              String    @unique @default(uuid()) @db.Uuid
+  created_at        DateTime? @default(now()) @db.Timestamptz
+  updated_at        DateTime? @updatedAt @db.Timestamptz
+  title             String?   @db.VarChar(255)
+  is_billable       Boolean   @default(false)
+  is_archived       Boolean   @default(false)
+  provider_group_id BigInt?
+  created_by_id     BigInt?
+
+  provider_group provider_group? @relation(fields: [provider_group_id], references: [id])
+  created_by     provider?       @relation(fields: [created_by_id], references: [id])
+
+  @@index([provider_group_id])
+  @@index([created_by_id])
+  @@index([created_at])
+}
+
+model bulk_communication_template {
+  id                BigInt    @id @default(autoincrement())
+  uuid              String    @unique @default(uuid()) @db.Uuid
+  created_at        DateTime? @default(now()) @db.Timestamptz
+  updated_at        DateTime? @updatedAt @db.Timestamptz
+  title             String?   @db.VarChar(255)
+  subject           String?   @db.VarChar(255)
+  template_body     String?   @db.Text
+  template_type     String?   @db.VarChar(100)
+  achieved          Boolean   @default(false)
+  provider_group_id BigInt?
+  created_by_id     BigInt?
+  updated_by_id     BigInt?
+  achieved_by_id    BigInt?
+
+  provider_group provider_group?                       @relation(fields: [provider_group_id], references: [id])
+  revisions      bulk_communication_template_revision[]
+
+  @@index([provider_group_id])
+  @@index([template_type])
+  @@index([created_at])
+}
+
+model bulk_communication_template_revision {
+  id             String    @id @default(uuid()) @db.Uuid
+  template_id    BigInt
+  created_at     DateTime? @default(now()) @db.Timestamptz
+  old_title      String?   @db.VarChar(255)
+  new_title      String?   @db.VarChar(255)
+  old_content    String?   @db.Text
+  new_content    String?   @db.Text
+  revision_by_id BigInt?
+
+  template bulk_communication_template @relation(fields: [template_id], references: [id], onDelete: Cascade)
+
+  @@index([template_id])
+}
+
+model consent {
+  id            BigInt    @id @default(autoincrement())
+  uuid          String    @unique @default(uuid()) @db.Uuid
+  created_at    DateTime? @default(now()) @db.Timestamptz
+  updated_at    DateTime? @updatedAt @db.Timestamptz
+  title         String?   @db.VarChar(200)
+  program       String?   @db.VarChar(100)
+  file          String?   @db.Text
+  created_by_id BigInt?
+  deleted_by_id BigInt?
+  deleted_at    DateTime? @db.Timestamptz
+  is_deleted    Boolean   @default(false)
+
+  created_by provider? @relation("consent_created_by", fields: [created_by_id], references: [id])
+  deleted_by provider? @relation("consent_deleted_by", fields: [deleted_by_id], references: [id])
+
+  @@index([program])
+  @@index([created_at])
+}
+
+model careplan {
+  id                BigInt    @id @default(autoincrement())
+  uuid              String    @unique @default(uuid()) @db.Uuid
+  created_at        DateTime? @default(now()) @db.Timestamptz
+  updated_at        DateTime? @updatedAt @db.Timestamptz
+  title             String?   @db.VarChar(200)
+  description       String?   @db.VarChar(255)
+  support           Boolean   @default(false)
+  allergies         Boolean   @default(false)
+  medications       Boolean   @default(false)
+  is_active         Boolean   @default(true)
+  programs          Json?     @db.Json
+  copied            Boolean   @default(false)
+  copied_from_id    BigInt?
+  creator_id        BigInt?
+  provider_group_id BigInt?
+
+  creator        provider?       @relation(fields: [creator_id], references: [id])
+  provider_group provider_group? @relation(fields: [provider_group_id], references: [id])
+  copied_from    careplan?       @relation("careplan_copied_from", fields: [copied_from_id], references: [id])
+  copies         careplan[]      @relation("careplan_copied_from")
+
+  @@index([title])
+  @@index([creator_id])
+  @@index([provider_group_id])
+  @@index([copied_from_id])
+  @@index([created_at])
 }
