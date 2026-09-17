@@ -479,7 +479,12 @@ CREATE TABLE "patient_allergies" (
     "name" TEXT NOT NULL,
     "reaction" TEXT,
     "severity" TEXT,
+    "criticality" TEXT,
+    "onset_date" DATE,
     "notes" TEXT,
+    "is_source_ehr" BOOLEAN NOT NULL DEFAULT false,
+    "is_deleted" BOOLEAN NOT NULL DEFAULT false,
+    "updated_by_id" BIGINT,
     "is_active" BOOLEAN NOT NULL DEFAULT true,
     "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMPTZ(3) NOT NULL,
@@ -500,6 +505,15 @@ CREATE TABLE "patient_medications" (
     "startDate" DATE,
     "endDate" DATE,
     "notes" TEXT,
+    "status" TEXT,
+    "sig" TEXT,
+    "unit" TEXT,
+    "taken_when" TEXT,
+    "days" INTEGER,
+    "for_lifetime" BOOLEAN NOT NULL DEFAULT false,
+    "is_source_ehr" BOOLEAN NOT NULL DEFAULT false,
+    "is_deleted" BOOLEAN NOT NULL DEFAULT false,
+    "updated_by_id" BIGINT,
     "is_active" BOOLEAN NOT NULL DEFAULT true,
     "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMPTZ(3) NOT NULL,
@@ -1096,6 +1110,15 @@ CREATE TABLE "assessments" (
 );
 
 -- CreateTable
+CREATE TABLE "assessment_conditions" (
+    "id" BIGSERIAL NOT NULL,
+    "assessment_id" BIGINT NOT NULL,
+    "condition_id" BIGINT NOT NULL,
+
+    CONSTRAINT "assessment_conditions_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "assessment_questions" (
     "id" BIGSERIAL NOT NULL,
     "uuid" UUID NOT NULL,
@@ -1107,6 +1130,7 @@ CREATE TABLE "assessment_questions" (
     "choices" JSON,
     "assessment_id" BIGINT NOT NULL,
     "creator_id" BIGINT,
+    "choice_id" BIGINT,
 
     CONSTRAINT "assessment_questions_pkey" PRIMARY KEY ("id")
 );
@@ -2243,10 +2267,19 @@ CREATE INDEX "assessments_category_idx" ON "assessments"("category");
 CREATE INDEX "assessments_created_at_idx" ON "assessments"("created_at");
 
 -- CreateIndex
+CREATE INDEX "assessment_conditions_condition_id_idx" ON "assessment_conditions"("condition_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "assessment_conditions_assessment_id_condition_id_key" ON "assessment_conditions"("assessment_id", "condition_id");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "assessment_questions_uuid_key" ON "assessment_questions"("uuid");
 
 -- CreateIndex
 CREATE INDEX "assessment_questions_assessment_id_idx" ON "assessment_questions"("assessment_id");
+
+-- CreateIndex
+CREATE INDEX "assessment_questions_choice_id_idx" ON "assessment_questions"("choice_id");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "assessment_question_choices_uuid_key" ON "assessment_question_choices"("uuid");
@@ -2753,7 +2786,19 @@ ALTER TABLE "care_plan_tasks" ADD CONSTRAINT "care_plan_tasks_template_id_fkey" 
 ALTER TABLE "assessments" ADD CONSTRAINT "assessments_provider_group_id_fkey" FOREIGN KEY ("provider_group_id") REFERENCES "provider_groups"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "assessments" ADD CONSTRAINT "assessments_creator_id_fkey" FOREIGN KEY ("creator_id") REFERENCES "providers"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assessment_conditions" ADD CONSTRAINT "assessment_conditions_assessment_id_fkey" FOREIGN KEY ("assessment_id") REFERENCES "assessments"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assessment_conditions" ADD CONSTRAINT "assessment_conditions_condition_id_fkey" FOREIGN KEY ("condition_id") REFERENCES "conditions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "assessment_questions" ADD CONSTRAINT "assessment_questions_assessment_id_fkey" FOREIGN KEY ("assessment_id") REFERENCES "assessments"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assessment_questions" ADD CONSTRAINT "assessment_questions_choice_id_fkey" FOREIGN KEY ("choice_id") REFERENCES "assessment_question_choices"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "assessment_question_choices" ADD CONSTRAINT "assessment_question_choices_question_id_fkey" FOREIGN KEY ("question_id") REFERENCES "assessment_questions"("id") ON DELETE CASCADE ON UPDATE CASCADE;

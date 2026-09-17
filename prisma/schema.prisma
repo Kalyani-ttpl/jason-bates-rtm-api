@@ -229,6 +229,7 @@ model Provider {
 
   care_manager_for       PatientCareManager[]
   prescribed_medications PatientMedication[]
+  assessments            Assessment[]
   education_materials    EducationMaterial[]
 
   @@index([added_by_id])
@@ -265,9 +266,10 @@ model Condition {
   for_rpm     Boolean?  @default(false)
   programs    Json?     @db.Json
 
-  questions ConditionQuestion[]
-  icd_codes IcdCode[]
-  careplans CarePlanCondition[]
+  questions   ConditionQuestion[]
+  icd_codes   IcdCode[]
+  careplans   CarePlanCondition[]
+  assessments AssessmentCondition[]
 
   patient_conditions  PatientCondition[]
   careplan_questions  CarePlanQuestion[]
@@ -660,16 +662,21 @@ model PatientImaging {
 }
 
 model PatientAllergy {
-  id        BigInt   @id @default(autoincrement())
-  uuid      String   @unique @default(uuid()) @db.Uuid
-  patientId BigInt   @map("patient_id")
-  name      String
-  reaction  String?
-  severity  String?
-  notes     String?
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  id          BigInt    @id @default(autoincrement())
+  uuid        String    @unique @default(uuid()) @db.Uuid
+  patientId   BigInt    @map("patient_id")
+  name        String
+  reaction    String?
+  severity    String?
+  criticality String?
+  onsetDate   DateTime? @map("onset_date") @db.Date
+  notes       String?
+  isSourceEhr Boolean   @default(false) @map("is_source_ehr")
+  isDeleted   Boolean   @default(false) @map("is_deleted")
+  updatedById BigInt?   @map("updated_by_id")
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   patient Patient @relation(fields: [patientId], references: [id], onDelete: Restrict)
 
@@ -691,6 +698,15 @@ model PatientMedication {
   startDate      DateTime? @db.Date
   endDate        DateTime? @db.Date
   notes          String?
+  status         String?
+  sig            String?
+  unit           String?
+  takenWhen      String?   @map("taken_when")
+  days           Int?
+  forLifetime    Boolean   @default(false) @map("for_lifetime")
+  isSourceEhr    Boolean   @default(false) @map("is_source_ehr")
+  isDeleted      Boolean   @default(false) @map("is_deleted")
+  updatedById    BigInt?   @map("updated_by_id")
   isActive       Boolean   @default(true) @map("is_active")
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -1419,13 +1435,28 @@ model Assessment {
   provider_group_id   BigInt?
 
   provider_group ProviderGroup?       @relation(fields: [provider_group_id], references: [id])
+  creator        Provider?            @relation(fields: [creator_id], references: [id])
   questions      AssessmentQuestion[]
   assigned       AssignedAssessment[]
+  conditions     AssessmentCondition[]
 
   @@index([provider_group_id])
   @@index([category])
   @@index([created_at])
   @@map("assessments")
+}
+
+model AssessmentCondition {
+  id            BigInt @id @default(autoincrement())
+  assessment_id BigInt
+  condition_id  BigInt
+
+  assessment Assessment @relation(fields: [assessment_id], references: [id], onDelete: Cascade)
+  condition  Condition  @relation(fields: [condition_id], references: [id], onDelete: Cascade)
+
+  @@unique([assessment_id, condition_id])
+  @@index([condition_id])
+  @@map("assessment_conditions")
 }
 
 model AssessmentQuestion {
@@ -1439,11 +1470,14 @@ model AssessmentQuestion {
   choices       Json?     @db.Json
   assessment_id BigInt
   creator_id    BigInt?
+  choice_id     BigInt?
 
-  assessment     Assessment                 @relation(fields: [assessment_id], references: [id], onDelete: Cascade)
+  assessment     Assessment                @relation(fields: [assessment_id], references: [id], onDelete: Cascade)
+  parent_choice  AssessmentQuestionChoice? @relation("choice_questions", fields: [choice_id], references: [id], onDelete: Cascade)
   choice_options AssessmentQuestionChoice[]
 
   @@index([assessment_id])
+  @@index([choice_id])
   @@map("assessment_questions")
 }
 
@@ -1458,7 +1492,8 @@ model AssessmentQuestionChoice {
   question_id  BigInt
   creator_id   BigInt?
 
-  question AssessmentQuestion @relation(fields: [question_id], references: [id], onDelete: Cascade)
+  question  AssessmentQuestion   @relation(fields: [question_id], references: [id], onDelete: Cascade)
+  questions AssessmentQuestion[] @relation("choice_questions")
 
   @@index([question_id])
   @@map("assessment_question_choices")

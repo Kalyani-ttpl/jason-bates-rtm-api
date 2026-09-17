@@ -4,10 +4,12 @@ import { APP_GUARD } from "@nestjs/core";
 import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { AppController } from "./app.controller";
 import { AppService } from "./app.service";
+import { AssessmentsModule } from "./assessments/assessments.module";
 import { AuthModule } from "./auth/auth.module";
 import { CareplanModule } from "./careplan/careplan.module";
 import { DataimportModule } from "./dataimport/dataimport.module";
 import { LibraryModule } from "./library/library.module";
+import { PatientChartingModule } from "./patient-charting/patient-charting.module";
 import { PatientsModule } from "./patients/patients.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { ProvidergroupModule } from "./providergroup/providergroup.module";
@@ -21,10 +23,12 @@ import { ProvidersModule } from "./providers/providers.module";
     }),
     PrismaModule,
     AuthModule,
+    AssessmentsModule,
     LibraryModule,
     CareplanModule,
     DataimportModule,
     PatientsModule,
+    PatientChartingModule,
     ProvidergroupModule,
     ProvidersModule,
   ],
