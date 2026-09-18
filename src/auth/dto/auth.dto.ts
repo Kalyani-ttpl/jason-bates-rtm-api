@@ -1,5 +1,11 @@
-import { ApiProperty } from "@nestjs/swagger";
-import { IsNotEmpty, IsString, MinLength } from "class-validator";
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import {
+  IsBoolean,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MinLength,
+} from "class-validator";
 
 export class LoginDto {
   @ApiProperty({ example: "provider@jason-rtm.com" })
@@ -11,13 +17,25 @@ export class LoginDto {
   @IsString()
   @IsNotEmpty()
   password: string;
+
+  @ApiPropertyOptional({
+    description:
+      "Keep the refresh cookie after the browser closes. Without it the refresh cookie is a session cookie.",
+    example: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  remember_me?: boolean;
 }
 
 export class RefreshTokenDto {
-  @ApiProperty()
+  @ApiPropertyOptional({
+    description:
+      "Only needed without cookies (Swagger, API tools). The browser app sends the refresh_token cookie instead.",
+  })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  refresh: string;
+  refresh?: string;
 }
 
 export class ChangePasswordDto {

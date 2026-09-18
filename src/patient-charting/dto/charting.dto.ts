@@ -9,6 +9,7 @@ import {
   IsOptional,
   IsString,
 } from "class-validator";
+import { ToBoolean } from "../../common/transforms";
 
 /** Shared by every charting tab: paginate, search, sort, hide soft-deleted. */
 export class ChartingQueryDto {
@@ -42,6 +43,7 @@ export class ChartingQueryDto {
     example: false,
   })
   @IsOptional()
+  @ToBoolean()
   @IsBoolean()
   is_deleted?: boolean;
 }

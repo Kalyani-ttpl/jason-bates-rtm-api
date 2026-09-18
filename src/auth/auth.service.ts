@@ -4,10 +4,11 @@ import * as bcrypt from "bcrypt";
 import { BaseService } from "../common/base.service";
 import { AuthenticatedUser, JwtPayload } from "../common/constants";
 import { PrismaService } from "../prisma/prisma.service";
-import { LoginDto, RefreshTokenDto } from "./dto/auth.dto";
-
-const ACCESS_TOKEN_EXPIRES_IN = "1h";
-const REFRESH_TOKEN_EXPIRES_IN = "7d";
+import {
+  ACCESS_TOKEN_EXPIRES_IN,
+  REFRESH_TOKEN_EXPIRES_IN,
+} from "../common/cookie";
+import { LoginDto } from "./dto/auth.dto";
 
 @Injectable()
 export class AuthService extends BaseService {
@@ -73,7 +74,7 @@ export class AuthService extends BaseService {
 
     return {
       access: this.signAccessToken(payload),
-      refresh: this.signRefreshToken(payload),
+      refresh: this.signRefreshToken(payload, loginDto.remember_me ?? false),
       user: {
         id: user.id,
         uuid: user.uuid,
@@ -88,11 +89,19 @@ export class AuthService extends BaseService {
     };
   }
 
-  /** Issues a new access token from a valid refresh token. */
-  async refreshToken(dto: RefreshTokenDto) {
+  /**
+   * Swaps a valid refresh token for a new access and refresh pair. The refresh
+   * token is rotated too, keeping its `remember_me` so the controller re-issues
+   * the cookie with the same lifetime.
+   */
+  async refreshToken(refresh?: string) {
+    if (!refresh) {
+      throw new UnauthorizedException("Missing refresh token");
+    }
+
     let payload: JwtPayload;
     try {
-      payload = await this.jwtService.verifyAsync<JwtPayload>(dto.refresh, {
+      payload = await this.jwtService.verifyAsync<JwtPayload>(refresh, {
         secret: process.env.JWTSECRET,
       });
     } catch {
@@ -103,15 +112,23 @@ export class AuthService extends BaseService {
       throw new UnauthorizedException("Invalid token type");
     }
 
+    // Rebuilt field by field: `iat`/`exp` must not carry over, or the new
+    // tokens would inherit the old expiry.
+    const rememberMe = payload.remember_me ?? false;
     const accessPayload: JwtPayload = {
-      ...payload,
       token_type: "access",
+      user_id: payload.user_id,
+      id: payload.id,
       jti: this.generateUUID(),
+      provider_id: payload.provider_id,
+      language: payload.language,
     };
-    delete accessPayload.iat;
-    delete accessPayload.exp;
 
-    return { access: this.signAccessToken(accessPayload) };
+    return {
+      access: this.signAccessToken(accessPayload),
+      refresh: this.signRefreshToken(accessPayload, rememberMe),
+      remember_me: rememberMe,
+    };
   }
 
   /** Returns the signed-in provider's profile and group memberships. */
@@ -155,9 +172,14 @@ export class AuthService extends BaseService {
     });
   }
 
-  private signRefreshToken(payload: JwtPayload) {
+  private signRefreshToken(payload: JwtPayload, rememberMe: boolean) {
     return this.jwtService.sign(
-      { ...payload, token_type: "refresh", jti: this.generateUUID() },
+      {
+        ...payload,
+        token_type: "refresh",
+        jti: this.generateUUID(),
+        remember_me: rememberMe,
+      },
       {
         secret: process.env.JWTSECRET,
         expiresIn: REFRESH_TOKEN_EXPIRES_IN,

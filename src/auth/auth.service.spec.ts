@@ -138,24 +138,58 @@ describe("AuthService", () => {
   });
 
   describe("refreshToken", () => {
-    it("issues a new access token from a refresh token", async () => {
+    const loggedIn = async (remember_me?: boolean) => {
       prisma.user.findFirst.mockResolvedValue(await activeUser());
       prisma.provider.findFirst.mockResolvedValue({ id: 20n, language: "en" });
-      const { refresh } = await service.login(login());
+      return service.login({ ...login(), remember_me });
+    };
 
-      const { access } = await service.refreshToken({ refresh });
+    it("issues a new access token from a refresh token", async () => {
+      const { refresh } = await loggedIn();
+
+      const { access } = await service.refreshToken(refresh);
       const payload = jwtService.verify<JwtPayload>(access, { secret });
 
       expect(payload.token_type).toBe("access");
       expect(payload.provider_id).toBe(20);
+      expect(payload).not.toHaveProperty("remember_me");
+    });
+
+    it("rotates the refresh token", async () => {
+      const { refresh } = await loggedIn();
+
+      const result = await service.refreshToken(refresh);
+      const payload = jwtService.verify<JwtPayload>(result.refresh, { secret });
+
+      expect(result.refresh).not.toBe(refresh);
+      expect(payload.token_type).toBe("refresh");
+      expect(payload.provider_id).toBe(20);
+    });
+
+    it("carries remember_me through rotation", async () => {
+      const remembered = await service.refreshToken(
+        (await loggedIn(true)).refresh,
+      );
+      const forgotten = await service.refreshToken((await loggedIn()).refresh);
+
+      expect(remembered.remember_me).toBe(true);
+      expect(forgotten.remember_me).toBe(false);
+      expect(
+        jwtService.verify<JwtPayload>(remembered.refresh, { secret })
+          .remember_me,
+      ).toBe(true);
+    });
+
+    it("rejects a missing token", async () => {
+      await expect(service.refreshToken(undefined)).rejects.toThrow(
+        "Missing refresh token",
+      );
     });
 
     it("rejects an access token", async () => {
-      prisma.user.findFirst.mockResolvedValue(await activeUser());
-      prisma.provider.findFirst.mockResolvedValue(null);
-      const { access } = await service.login(login());
+      const { access } = await loggedIn();
 
-      await expect(service.refreshToken({ refresh: access })).rejects.toThrow(
+      await expect(service.refreshToken(access)).rejects.toThrow(
         UnauthorizedException,
       );
     });
@@ -165,7 +199,7 @@ describe("AuthService", () => {
         token_type: "refresh",
       });
 
-      await expect(service.refreshToken({ refresh: forged })).rejects.toThrow(
+      await expect(service.refreshToken(forged)).rejects.toThrow(
         UnauthorizedException,
       );
     });

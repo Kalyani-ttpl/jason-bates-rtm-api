@@ -5,6 +5,8 @@ export interface JwtPayload {
   jti: string;
   provider_id: number | null;
   language: string;
+  /** Refresh tokens only: re-issue the refresh cookie as persistent on refresh. */
+  remember_me?: boolean;
   iat?: number;
   exp?: number;
 }
